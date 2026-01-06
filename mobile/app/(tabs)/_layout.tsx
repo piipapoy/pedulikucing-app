@@ -1,80 +1,132 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // Library Icon bawaan Expo
-import { View } from 'react-native';
+import { View, StyleSheet, Platform, TouchableOpacity, Text } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons'; 
+
+// 1. UPDATE TIPE (Terima argument 'e' / event biar ga merah)
+type CustomButtonProps = {
+  children: React.ReactNode;
+  onPress?: (e: any) => void; 
+};
+
+// 2. CUSTOM BUTTON 
+const CustomLaporButton = ({ children, onPress }: CustomButtonProps) => (
+  <TouchableOpacity
+    style={styles.customButtonContainer}
+    onPress={onPress}
+    activeOpacity={0.8}
+  >
+    <View style={styles.customButton}>
+      {children}
+    </View>
+    <Text style={styles.customLabel}>Lapor</Text>
+  </TouchableOpacity>
+);
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // Hilangkan header default (kita bikin custom nanti)
+        headerShown: false,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: '#12464C', 
+        tabBarInactiveTintColor: '#999999',
+        
         tabBarStyle: {
-          backgroundColor: '#FFF',
-          borderTopWidth: 0,
-          elevation: 5, // Shadow di Android
-          height: 60,
-          paddingBottom: 10,
-          paddingTop: 10,
+          height: Platform.OS === 'ios' ? 90 : 70, 
+          paddingBottom: Platform.OS === 'ios' ? 30 : 12, 
+          paddingTop: 8, 
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#F0F0F0',
+          elevation: 0,
         },
-        tabBarActiveTintColor: '#2A9D8F', // Warna Icon saat Aktif (Teal)
-        tabBarInactiveTintColor: '#C0C0C0', // Warna Icon saat Mati (Abu)
-        tabBarShowLabel: true, // Tampilkan tulisan di bawah icon
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '500',
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+        }
       }}
     >
-      {/* Tab 1: Home */}
+      {/* 1. HOME */}
       <Tabs.Screen
         name="home"
         options={{
           title: 'Beranda',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Feather name="home" size={24} color={color} />,
         }}
       />
 
-      {/* Tab 2: Adopsi (Katalog) */}
+      {/* 2. ADOPSI */}
       <Tabs.Screen
         name="adopsi"
         options={{
           title: 'Adopsi',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="paw" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="paw-outline" size={24} color={color} />,
         }}
       />
 
-      {/* Tab 3: Lapor (Tengah Besar - Opsional) */}
+      {/* 3. LAPOR */}
       <Tabs.Screen
         name="lapor"
         options={{
           title: 'Lapor',
-          tabBarIcon: ({ color, size }) => (
-            <View style={{
-              backgroundColor: '#E76F51', // Merah Bata
-              width: 50,
-              height: 50,
-              borderRadius: 25,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 20, // Biar agak naik ke atas
-              elevation: 5
-            }}>
-              <Ionicons name="alert-circle" size={30} color="#FFF" />
-            </View>
+          tabBarButton: (props) => (
+            <CustomLaporButton onPress={props.onPress}>
+              <Ionicons name="megaphone-outline" size={26} color="#FFF" />
+            </CustomLaporButton>
           ),
-          tabBarLabelStyle: { display: 'none' } // Hilangkan tulisan Lapor biar rapi
         }}
       />
 
-      {/* Tab 4: Profil */}
+      {/* 4. CHAT */}
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Pesan',
+          tabBarIcon: ({ color }) => <Feather name="message-circle" size={24} color={color} />,
+        }}
+      />
+
+      {/* 5. PROFIL */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Akun',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Feather name="user" size={24} color={color} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  customButtonContainer: {
+    top: -20, 
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 70, 
+  },
+  customButton: {
+    width: 52, 
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E76F51', 
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#E76F51',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    marginBottom: 4, 
+  },
+  customLabel: {
+    color: '#E76F51', 
+    fontSize: 10, 
+    fontWeight: '600',
+  }
+});

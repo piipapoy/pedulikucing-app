@@ -27,6 +27,15 @@ export default function ProfileScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
+  // --- State Ganti Password ---
+  const [showCurrentPassModal, setShowCurrentPassModal] = useState(false);
+  const [showNewPassModal, setShowNewPassModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = useState(false); // Mata untuk pass sekarang
+  const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false); // Mata untuk pass baru
+  const [loadingPass, setLoadingPass] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
       fetchUserProfile();
@@ -75,7 +84,56 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // CEK SEBELUM SIMPAN
+  // --- LOGIC GANTI PASSWORD ---
+  const handleVerifyCurrentPass = async () => {
+    if (!currentPassword) return;
+    
+    setLoadingPass(true);
+    try {
+      // Verifikasi kredensial via login endpoint
+      await api.post('/auth/login', { 
+        email: user.email, 
+        password: currentPassword 
+      });
+      
+      setShowCurrentPassModal(false);
+      setCurrentPassword('');
+      setIsCurrentPasswordVisible(false);
+      setShowNewPassModal(true);
+    } catch (error) {
+      setErrorMessage('Kata sandi saat ini salah.');
+      setShowErrorModal(true);
+    } finally {
+      setLoadingPass(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) {
+      setErrorMessage('Kata sandi minimal 6 karakter.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    setLoadingPass(true);
+    try {
+      await api.post('/auth/reset-password', { 
+        email: user.email, 
+        newPassword 
+      });
+      setShowNewPassModal(false);
+      setNewPassword('');
+      setIsNewPasswordVisible(false);
+      Alert.alert('Sukses', 'Kata sandi berhasil diperbarui!');
+    } catch (error) {
+      setErrorMessage('Gagal memperbarui kata sandi. Silakan coba lagi.');
+      setShowErrorModal(true);
+    } finally {
+      setLoadingPass(false);
+    }
+  };
+
+  // --- LOGIC PROFIL ---
   const handlePreSave = async () => {
     if (nickname.length > 12) {
       setErrorMessage('Nickname maksimal 12 karakter.');
@@ -83,7 +141,6 @@ export default function ProfileScreen() {
       return;
     }
 
-    // Jika ganti nomor dan tidak kosong -> Cek duplikat dulu
     if (phone !== user?.phoneNumber && phone.trim() !== '') {
       setLoading(true);
       try {
@@ -136,11 +193,7 @@ export default function ProfileScreen() {
       Alert.alert('Sukses', 'Profil berhasil diperbarui!');
       fetchUserProfile(); 
     } catch (error) {
-      if (error.response?.status === 409) {
-         setErrorMessage('Nomor telepon sudah digunakan.');
-      } else {
-         setErrorMessage('Gagal menyimpan profil.');
-      }
+      setErrorMessage(error.response?.status === 409 ? 'Nomor telepon sudah digunakan.' : 'Gagal menyimpan profil.');
       setShowErrorModal(true);
     } finally {
       setLoading(false);
@@ -156,8 +209,19 @@ export default function ProfileScreen() {
 
   const isVerified = !!user?.phoneNumber;
 
+  const handleShelterRegistrationNav = () => {
+    // Cek apakah data shelter sudah terisi di state user
+    if (user?.shelterAddress || user?.documentKtp) {
+        setErrorMessage('Anda sudah mengirimkan permintaan pendaftaran. Silakan tunggu konfirmasi dari Admin.');
+        setShowErrorModal(true); // Gunakan Modal Error yang sudah ada
+    } else {
+        router.push('/register-shelter');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <ScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -218,11 +282,9 @@ export default function ProfileScreen() {
                 {isEditing ? (
                   <TextInput style={styles.textInput} value={phone} onChangeText={setPhone} placeholder="0812..." keyboardType="phone-pad" />
                 ) : (
-                  <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                    <Text style={[styles.valueText, { color: phone ? '#333' : '#999', fontStyle: phone ? 'normal' : 'italic' }]}>
-                      {phone ? maskPhoneNumber(phone) : 'Belum diatur'}
-                    </Text>
-                  </View>
+                  <Text style={[styles.valueText, { color: phone ? '#333' : '#999', fontStyle: phone ? 'normal' : 'italic' }]}>
+                    {phone ? maskPhoneNumber(phone) : 'Belum diatur'}
+                  </Text>
                 )}
               </View>
             </View>
@@ -243,11 +305,16 @@ export default function ProfileScreen() {
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Akun & Keamanan</Text></View>
           <View style={styles.card}>
-            <MenuItem icon="clock" label="Riwayat Aktivitas" onPress={() => Alert.alert('Info', 'Coming Soon')} />
+            <MenuItem icon="clock" label="Riwayat Aktivitas" onPress={() => router.push('/history')} />
             <View style={styles.divider} />
-            <MenuItem icon="lock" label="Ganti Kata Sandi" onPress={() => Alert.alert('Info', 'Coming Soon')} />
+            <MenuItem icon="lock" label="Ganti Kata Sandi" onPress={() => setShowCurrentPassModal(true)} />
             <View style={styles.divider} />
-            <MenuItem icon="home" label="Daftar Sebagai Shelter" color="#12464C" onPress={() => Alert.alert('Upgrade', 'Coming Soon')} />
+            <MenuItem 
+                icon="home" 
+                label="Daftar Sebagai Shelter" 
+                color="#12464C" 
+                onPress={handleShelterRegistrationNav}
+            />
           </View>
         </View>
 
@@ -258,17 +325,17 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* --- MODAL VERIFIKASI (OTP) --- */}
-      <Modal animationType="fade" transparent={true} visible={showVerifyModal} statusBarTranslucent={true} onRequestClose={() => setShowVerifyModal(false)}>
+      {/* --- MODAL VERIFIKASI PROFIL --- */}
+      <Modal animationType="fade" transparent={true} visible={showVerifyModal} statusBarTranslucent={true}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
+          <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.iconCircle}><Feather name="shield" size={32} color="#12464C" /></View>
               <Text style={styles.modalTitle}>Verifikasi Nomor</Text>
-              <Text style={styles.modalDesc}>Kode dikirim ke nomor Anda. (Demo: ABC123)</Text>
+              <Text style={styles.modalDesc}>Masukkan kode OTP untuk verifikasi profil. (ABC123)</Text>
               <TextInput style={styles.modalInput} placeholder="Kode OTP" value={otpCode} onChangeText={setOtpCode} autoCapitalize="characters" textAlign="center" />
               <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowVerifyModal(false)}><Text style={styles.modalBtnTextCancel}>Batal</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowVerifyModal(false); setOtpCode(''); }}><Text style={styles.modalBtnTextCancel}>Batal</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.modalBtnConfirm} onPress={handleVerifyOtp}><Text style={styles.modalBtnTextConfirm}>Verifikasi</Text></TouchableOpacity>
               </View>
             </View>
@@ -276,26 +343,81 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* --- MODAL ERROR (MERAH - FIXED STYLE) --- */}
-      <Modal animationType="fade" transparent={true} visible={showErrorModal} statusBarTranslucent={true} onRequestClose={() => setShowErrorModal(false)}>
+      {/* --- MODAL VERIFIKASI KATA SANDI SAAT INI (DENGAN IKON MATA) --- */}
+      <Modal animationType="fade" transparent={true} visible={showCurrentPassModal} statusBarTranslucent={true}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.iconCircle}><Feather name="lock" size={32} color="#12464C" /></View>
+              <Text style={styles.modalTitle}>Verifikasi Akun</Text>
+              <Text style={styles.modalDesc}>Masukkan kata sandi saat ini untuk melanjutkan ganti kata sandi.</Text>
+              
+              <View style={styles.passwordWrapper}>
+                <TextInput 
+                  style={styles.flexInput} 
+                  placeholder="Kata Sandi Sekarang" 
+                  value={currentPassword} 
+                  onChangeText={setCurrentPassword} 
+                  secureTextEntry={!isCurrentPasswordVisible} 
+                />
+                <TouchableOpacity onPress={() => setIsCurrentPasswordVisible(!isCurrentPasswordVisible)}>
+                  <Feather name={isCurrentPasswordVisible ? "eye" : "eye-off"} size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowCurrentPassModal(false); setCurrentPassword(''); setIsCurrentPasswordVisible(false); }}><Text style={styles.modalBtnTextCancel}>Batal</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.modalBtnConfirm} onPress={handleVerifyCurrentPass} disabled={loadingPass}>
+                  {loadingPass ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnTextConfirm}>Lanjut</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- MODAL INPUT PASSWORD BARU (DENGAN IKON MATA) --- */}
+      <Modal animationType="fade" transparent={true} visible={showNewPassModal} statusBarTranslucent={true}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.iconCircle}><Feather name="shield" size={32} color="#12464C" /></View>
+              <Text style={styles.modalTitle}>Kata Sandi Baru</Text>
+              <Text style={styles.modalDesc}>Silakan buat kata sandi baru untuk akun Anda.</Text>
+              
+              <View style={styles.passwordWrapper}>
+                <TextInput 
+                  style={styles.flexInput} 
+                  placeholder="Minimal 6 karakter" 
+                  value={newPassword} 
+                  onChangeText={setNewPassword} 
+                  secureTextEntry={!isNewPasswordVisible} 
+                />
+                <TouchableOpacity onPress={() => setIsNewPasswordVisible(!isNewPasswordVisible)}>
+                  <Feather name={isNewPasswordVisible ? "eye" : "eye-off"} size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowNewPassModal(false); setNewPassword(''); setIsNewPasswordVisible(false); }}><Text style={styles.modalBtnTextCancel}>Batal</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.modalBtnConfirm} onPress={handleUpdatePassword} disabled={loadingPass}>
+                  {loadingPass ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnTextConfirm}>Simpan</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- MODAL ERROR --- */}
+      <Modal animationType="fade" transparent={true} visible={showErrorModal} statusBarTranslucent={true}>
         <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <View style={styles.modalContent}>
-                {/* Icon Error */}
-                <View style={[styles.iconCircle, { backgroundColor: '#FFEBEE' }]}>
-                  <Feather name="alert-triangle" size={32} color="#FF3B30" />
-                </View>
-                {/* Judul Neutral */}
-                <Text style={styles.modalTitle}>Tidak Bisa Menyimpan</Text>
-                {/* Pesan Error Dinamis */}
+                <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}><Feather name="check-circle" size={40} color="#2E7D32" /></View>
+                <Text style={styles.modalTitle}>Sudah Daftar</Text>
                 <Text style={styles.modalDesc}>{errorMessage}</Text>
-                
-                {/* Tombol Tunggal (Tutup) */}
-                <View style={{ width: '100%' }}>
-                  <TouchableOpacity style={styles.modalBtnSingle} onPress={() => setShowErrorModal(false)}>
-                    <Text style={styles.modalBtnTextCancel}>Tutup</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.modalBtnSingle} onPress={() => setShowErrorModal(false)}><Text style={styles.modalBtnTextCancel}>Tutup</Text></TouchableOpacity>
               </View>
             </View>
         </View>
@@ -352,32 +474,19 @@ const styles = StyleSheet.create({
   menuLabel: { fontSize: 15, fontWeight: '500' },
   logoutBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFEBEE', marginHorizontal: 20, paddingVertical: 14, borderRadius: 12, gap: 8 },
   logoutText: { color: '#D32F2F', fontWeight: 'bold', fontSize: 14 },
-  
-  // MODAL STYLES (UPDATED FOR CENTERING)
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { width: '85%' }, // Container yg ngatur lebar
-  modalContent: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 20, 
-    padding: 24, 
-    alignItems: 'center',
-    width: '100%' // Isiannya full ngikutin container
-  },
+  modalContainer: { width: '85%' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center', width: '100%' },
   iconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E0F2F1', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 8 },
   modalDesc: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
   modalInput: { width: '100%', height: 50, borderWidth: 1, borderColor: '#DDD', borderRadius: 12, paddingHorizontal: 16, fontSize: 18, marginBottom: 20, backgroundColor: '#FAFAFA' },
+  passwordWrapper: { flexDirection: 'row', alignItems: 'center', width: '100%', height: 50, borderWidth: 1, borderColor: '#DDD', borderRadius: 12, paddingHorizontal: 16, marginBottom: 20, backgroundColor: '#FAFAFA' },
+  flexInput: { flex: 1, fontSize: 16 },
   modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
   modalBtnCancel: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#F5F5F5', alignItems: 'center' },
   modalBtnTextCancel: { color: '#666', fontWeight: 'bold' },
   modalBtnConfirm: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#12464C', alignItems: 'center' },
-  modalBtnSingle: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#EEE',
-    alignItems: 'center',
-    marginTop: 10
-  },
   modalBtnTextConfirm: { color: '#FFF', fontWeight: 'bold' },
+  modalBtnSingle: { width: '100%', paddingVertical: 14, borderRadius: 10, backgroundColor: '#EEE', alignItems: 'center', marginTop: 10 },
 });

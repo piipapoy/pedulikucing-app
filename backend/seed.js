@@ -4,9 +4,9 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Mulai Seeding Data Lengkap...');
+  console.log('🌱 Mulai Seeding Data Terintegrasi...');
 
-  // 1. Bersihkan Data
+  // 1. Bersihkan Data (Urutan harus benar karena relasi foreign key)
   await prisma.message.deleteMany();
   await prisma.donation.deleteMany();
   await prisma.adoption.deleteMany();
@@ -17,17 +17,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash('123', 10);
 
-  // 2. USER
-  await prisma.user.create({
-    data: { name: 'Budi Adopter', email: 'user@peduli.kucing', password: passwordHash, role: 'USER' },
-  });
-
-  // 3. ADMIN
-  await prisma.user.create({
-    data: { name: 'Super Admin', email: 'admin@peduli.kucing', password: passwordHash, role: 'ADMIN' },
-  });
-
-  // 4. SHELTER (Sekaligus KLINIK)
+  // 2. CREATE MASTER DATA (Shelter & Admin)
   const shelter = await prisma.user.create({
     data: {
       name: 'Rumah Kucing Bandung',
@@ -36,72 +26,99 @@ async function main() {
       role: 'SHELTER',
       shelterAddress: 'Jl. Dago Atas No. 99',
       isShelterVerified: true,
-      isClinic: true, // <--- DIA PUNYA KLINIK
+      isClinic: true,
       clinicOpenHours: '08:00 - 21:00 WIB',
     },
   });
 
-  // 5. KUCING (Data Dummy)
-  await prisma.cat.createMany({
-    data: [
-      {
-        name: 'Mochi',
-        age: 1,
-        gender: 'Jantan',
-        breed: 'Domestik',
-        description: 'Mochi kucing oren yang sangat aktif dan suka bermain bola.',
-        imageUrl: 'https://images.unsplash.com/photo-1574158622682-e40e69881006', // Gambar Kucing Asli
-        isApproved: true,
-        shelterId: shelter.id,
-      },
-      {
-        name: 'Snowy',
-        age: 2,
-        gender: 'Betina',
-        breed: 'Anggora',
-        description: 'Snowy sangat kalem, suka tidur di pangkuan, butuh adopter penyabar.',
-        imageUrl: 'https://images.unsplash.com/photo-1529778873920-4da4926a7071',
-        isApproved: true,
-        shelterId: shelter.id,
-      },
-      {
-        name: 'Bella',
-        age: 3,
-        gender: 'Betina',
-        breed: 'Mix',
-        description: 'Bella diselamatkan dari jalanan, sekarang sudah sehat dan gembul.',
-        imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba',
-        isApproved: true,
-        shelterId: shelter.id,
-      },
-    ],
+  await prisma.user.create({
+    data: { name: 'Super Admin', email: 'admin@peduli.kucing', password: passwordHash, role: 'ADMIN' },
   });
 
-  // 6. CAMPAIGN DONASI
-  await prisma.campaign.createMany({
-    data: [
-      {
-        title: 'Bantu Mochi Operasi Kaki',
-        description: 'Mochi ditemukan dengan kaki patah. Butuh biaya operasi segera.',
-        targetAmount: 5000000,
-        currentAmount: 1250000,
-        imageUrl: 'https://images.unsplash.com/photo-1573865526739-10659fec78a5',
-        isApproved: true,
-        shelterId: shelter.id,
-      },
-      {
-        title: 'Makanan untuk 50 Kucing Jalanan',
-        description: 'Stok makanan di shelter menipis. Bantu kami memberi makan mereka.',
-        targetAmount: 3000000,
-        currentAmount: 500000,
-        imageUrl: 'https://images.unsplash.com/photo-1596854703056-bf6005719511',
-        isApproved: true,
-        shelterId: shelter.id,
-      },
-    ],
+  // 3. CREATE USER UTAMA (Raffa)
+  const raffa = await prisma.user.create({
+    data: { 
+      name: 'M. Raffa Mizanul Insan', 
+      email: 'rappepu@upi.edu', 
+      password: passwordHash, 
+      role: 'USER',
+      nickname: 'Raffa',
+      phoneNumber: '085779716750'
+    },
   });
 
-  console.log('✅ Seeding Selesai: Shelter punya Kucing, Klinik, & Donasi.');
+  // 4. CREATE KUCING
+  const mochi = await prisma.cat.create({
+    data: {
+      name: 'Mochi',
+      age: 1, gender: 'Jantan', breed: 'Domestik',
+      description: 'Mochi kucing oren yang sangat aktif.',
+      imageUrl: 'https://images.unsplash.com/photo-1574158622682-e40e69881006',
+      isApproved: true, shelterId: shelter.id,
+    }
+  });
+
+  const snowy = await prisma.cat.create({
+    data: {
+      name: 'Snowy',
+      age: 2, gender: 'Betina', breed: 'Anggora',
+      description: 'Snowy sangat kalem.',
+      imageUrl: 'https://images.unsplash.com/photo-1529778873920-4da4926a7071',
+      isApproved: true, shelterId: shelter.id,
+    }
+  });
+
+  // 5. CREATE CAMPAIGN
+  const campaignKaki = await prisma.campaign.create({
+    data: {
+      title: 'Bantu Mochi Operasi Kaki',
+      description: 'Butuh biaya operasi segera.',
+      targetAmount: 5000000,
+      currentAmount: 1250000,
+      imageUrl: 'https://images.unsplash.com/photo-1573865526739-10659fec78a5',
+      isApproved: true, shelterId: shelter.id,
+    }
+  });
+
+  // --- START SEEDING RIWAYAT RAFFA (SYNCED) ---
+
+  // A. Riwayat Laporan (Darurat)
+  await prisma.report.create({
+    data: {
+      userId: raffa.id,
+      conditionTags: "Luka Terbuka, Lemas",
+      description: "Kucing tertabrak di depan gerbang UPI, butuh rescue segera.",
+      imageUrl: "https://images.unsplash.com/photo-1548546738-8509cb246ed3",
+      address: "Jl. Setiabudi No. 229, Bandung",
+      latitude: -6.8606, longitude: 107.5902,
+      status: "ON_PROCESS"
+    }
+  });
+
+  // B. Riwayat Adopsi (Raffa mengajukan adopsi Snowy)
+  await prisma.adoption.create({
+    data: {
+      userId: raffa.id,
+      catId: snowy.id, // Terkoneksi ke Snowy
+      address: "Kost Raffa, Gegerkalong",
+      phone: raffa.phoneNumber,
+      reason: "Ingin memberikan rumah yang layak untuk Snowy.",
+      status: "PENDING"
+    }
+  });
+
+  // C. Riwayat Donasi (Raffa donasi ke campaign Mochi)
+  await prisma.donation.create({
+    data: {
+      amount: 150000,
+      message: "Semoga Mochi cepat sembuh!",
+      userId: raffa.id,
+      campaignId: campaignKaki.id, // Terkoneksi ke Campaign Mochi
+      status: "SUCCESS"
+    }
+  });
+
+  console.log('✅ Seeding Selesai: Semua riwayat Raffa tersinkronisasi dengan data Master.');
 }
 
 main()

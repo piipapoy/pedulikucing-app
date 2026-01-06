@@ -18,25 +18,24 @@ model User {
   nickname        String?
   phoneNumber     String?
   
-  // Khusus Shelter
-  shelterAddress  String?  
-  isShelterVerified Boolean @default(false) 
-  
-  // Fitur Klinik (Shelter bisa jadi Klinik)
+  // --- DATA SHELTER & KLINIK ---
+  shelterAddress  String?  @db.Text
   isClinic        Boolean  @default(false) 
-  clinicOpenHours String?  // Misal: "08:00 - 20:00"
+  clinicOpenHours String?  
+  documentKtp     String?  // Field baru untuk path KTP
+  shelterPhotos   String?  @db.Text // Field baru untuk path banyak foto (comma separated)
+  
+  isShelterVerified Boolean @default(false) 
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
-  // Relasi
+  // Relasi tetap sama seperti sebelumnya
   adoptions       Adoption[]      
   reports         Report[]        
   cats            Cat[]           
   campaigns       Campaign[]      
   donations       Donation[]
-  
-  // Relasi Chat
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
 }

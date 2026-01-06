@@ -118,21 +118,32 @@ model Donation {
 
 // --- LAPORAN DARURAT ---
 model Report {
-  id          Int      @id @default(autoincrement())
-  userId      Int?     
-  user        User?    @relation(fields: [userId], references: [id])
+  id              Int      @id @default(autoincrement())
   
-  guestName   String?  
-  guestContact String? 
+  // Identitas Pelapor
+  userId          Int?     // Nullable jika Guest
+  user            User?    @relation(fields: [userId], references: [id])
+  reporterName    String?  // Wajib jika userId null
+  reporterPhone   String?  // Wajib jika userId null
+
+  // Detail Kondisi (Sesuai Desain Figma kamu)
+  conditionTags   String   // Disimpan sebagai string "Tag1, Tag2, Tag3"
+  description     String?  @db.Text
   
-  title       String
-  description String   @db.Text
-  location    String
-  imageUrl    String?
+  // Media
+  imageUrl        String
+  videoUrl        String?
+
+  // Lokasi
+  address         String   @db.Text
+  latitude        Float
+  longitude       Float
+
+  // Status Laporan
+  status          ReportStatus @default(PENDING)
   
-  status      ReportStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // --- CHAT (REAL TIME) ---
@@ -167,8 +178,9 @@ enum AdoptionStatus {
 }
 
 enum ReportStatus {
-  PENDING       
-  IN_PROGRESS   
-  RESOLVED      
-  REJECTED      
+  PENDING
+  VERIFIED
+  ON_PROCESS
+  RESCUED
+  REJECTED
 }

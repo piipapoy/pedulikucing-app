@@ -140,4 +140,23 @@ router.put('/update-profile', authenticateToken, async (req, res) => {
   }
 });
 
+// 6. RESET / CHANGE PASSWORD
+router.post('/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update password berdasarkan email
+    const user = await prisma.user.update({
+      where: { email: email },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ message: 'Kata sandi berhasil diperbarui' });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal memperbarui kata sandi' });
+  }
+});
+
 module.exports = router;

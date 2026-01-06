@@ -1,33 +1,31 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const dotenv = require('dotenv');
 
+// Load env vars
 dotenv.config();
 
+// Import Routes
+const authRoutes = require('./routes/auth');
+const dataRoutes = require('./routes/data'); // <--- Pastikan ini ada
+
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // Supaya bisa baca JSON dari body request
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// Folder statis untuk gambar (foto kucing/laporan nanti)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// -- IMPORT ROUTES DISINI --
-const authRoutes = require('./routes/auth');
-// Nanti kita tambah route lain (adoption, report) disini
-
-// -- USE ROUTES DISINI --
+// --- REGISTER ROUTES ---
 app.use('/api/auth', authRoutes);
+app.use('/api/data', dataRoutes); // <--- PASTIKAN BARIS INI ADA DI SINI
 
-// Test Route
+// Root Check
 app.get('/', (req, res) => {
-  res.send('Server PeduliKucing berjalan dengan lancar!');
+  res.send('Server PeduliKucing is Running...');
 });
 
+// Start Server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

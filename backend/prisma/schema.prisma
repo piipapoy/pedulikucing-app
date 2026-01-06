@@ -7,19 +7,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- USER & ROLES ---
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  name            String
+  email           String   @unique
+  password        String
+  role            Role     @default(USER) 
   
-  adoptions Adoption[]
-  reports   Report[]
+  // Khusus Shelter
+  shelterAddress  String?  
+  isShelterVerified Boolean @default(false) 
+  
+  // Fitur Klinik (Shelter bisa jadi Klinik)
+  isClinic        Boolean  @default(false) 
+  clinicOpenHours String?  // Misal: "08:00 - 20:00"
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relasi
+  adoptions       Adoption[]      
+  reports         Report[]        
+  cats            Cat[]           
+  campaigns       Campaign[]      
+  donations       Donation[]
+  
+  // Relasi Chat
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 }
 
+// --- KUCING (PRODUK) ---
 model Cat {
   id          Int      @id @default(autoincrement())
   name        String
@@ -27,41 +46,108 @@ model Cat {
   gender      String
   breed       String
   description String   @db.Text
-  imageUrl    String
-  isAdopted   Boolean  @default(false)
+  imageUrl    String   
+  
+  isAdopted   Boolean  @default(false) 
+  isApproved  Boolean  @default(false) 
+  
+  shelterId   Int
+  shelter     User     @relation(fields: [shelterId], references: [id])
+  adoptions   Adoption[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  adoptions Adoption[]
 }
 
+// --- ADOPSI ---
 model Adoption {
-  id        Int            @id @default(autoincrement())
-  userId    Int
-  catId     Int
-  status    AdoptionStatus @default(PENDING)
-  reason    String         @db.Text
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  user        User           @relation(fields: [userId], references: [id])
+  catId       Int
+  cat         Cat            @relation(fields: [catId], references: [id])
+  
+  address     String         @db.Text 
+  phone       String
+  reason      String         @db.Text
+  idCardImage String?        
+  houseImage  String?        
 
-  user User @relation(fields: [userId], references: [id])
-  cat  Cat  @relation(fields: [catId], references: [id])
+  status      AdoptionStatus @default(PENDING) 
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 }
 
+// --- DONASI & CAMPAIGN ---
+model Campaign {
+  id            Int      @id @default(autoincrement())
+  title         String
+  description   String   @db.Text
+  targetAmount  Decimal  
+  currentAmount Decimal  @default(0) 
+  imageUrl      String?
+
+  isApproved    Boolean  @default(false) 
+  isClosed      Boolean  @default(false) 
+
+  shelterId     Int
+  shelter       User     @relation(fields: [shelterId], references: [id])
+  donations     Donation[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Donation {
+  id          Int      @id @default(autoincrement())
+  amount      Decimal
+  message     String?  
+  
+  userId      Int?     
+  user        User?    @relation(fields: [userId], references: [id])
+  campaignId  Int
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+
+  status      String   @default("SUCCESS") 
+  createdAt   DateTime @default(now())
+}
+
+// --- LAPORAN DARURAT ---
 model Report {
   id          Int      @id @default(autoincrement())
-  userId      Int
+  userId      Int?     
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  guestName   String?  
+  guestContact String? 
+  
   title       String
   description String   @db.Text
   location    String
   imageUrl    String?
-  status      String   @default("Pending")
+  
+  status      ReportStatus @default(PENDING)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
 }
 
+// --- CHAT (REAL TIME) ---
+model Message {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  
+  senderId  Int
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  
+  receiverId Int
+  receiver   User    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// --- ENUMS ---
 enum Role {
   USER
   ADMIN
@@ -69,9 +155,17 @@ enum Role {
 }
 
 enum AdoptionStatus {
-  PENDING
-  INTERVIEW
-  APPROVED
-  REJECTED
-  COMPLETED
+  PENDING       
+  INTERVIEW     
+  APPROVED      
+  COMPLETED     
+  REJECTED      
+  CANCELLED     
+}
+
+enum ReportStatus {
+  PENDING       
+  IN_PROGRESS   
+  RESOLVED      
+  REJECTED      
 }

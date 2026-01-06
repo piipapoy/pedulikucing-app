@@ -48,7 +48,13 @@ model Cat {
   gender      String
   breed       String
   description String   @db.Text
-  imageUrl    String   
+  
+  // Perubahan: Menampung multiple image paths (max 5)
+  images      String   @db.Text 
+  
+  // Fitur Baru: Tags karakteristik & kesehatan (disimpan sebagai string CSV)
+  personality String?  // Contoh: "Manja, Aktif, Penurut"
+  health      String?  // Contoh: "Steril, Vaksin, Bebas Kutu"
   
   isAdopted   Boolean  @default(false) 
   isApproved  Boolean  @default(false) 

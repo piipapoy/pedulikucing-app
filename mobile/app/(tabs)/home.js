@@ -312,4 +312,4 @@ const styles = StyleSheet.create({
   campStatsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   campValue: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
   campPercent: { fontSize: 12, color: COLORS.accent, fontWeight: 'bold' }
-});
+})

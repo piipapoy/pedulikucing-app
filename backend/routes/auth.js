@@ -153,7 +153,6 @@ router.put('/update-profile', authenticateToken, upload.fields([
     if (shelterAddress) updateData.shelterAddress = shelterAddress;
     if (clinicOpenHours) updateData.clinicOpenHours = clinicOpenHours;
 
-    // --- FIX: Tambahkan pengecekan if(req.files) sebelum akses properti ---
     if (req.files) {
       if (req.files['documentKtp'] && req.files['documentKtp'][0]) {
         updateData.documentKtp = `/uploads/${userId}_shelterReq/${req.files['documentKtp'][0].filename}`;

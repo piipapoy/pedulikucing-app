@@ -24,6 +24,11 @@ model User {
   clinicOpenHours String?  
   documentKtp     String?  // Field baru untuk path KTP
   shelterPhotos   String?  @db.Text // Field baru untuk path banyak foto (comma separated)
+
+  description     String?  @db.Text      // Cerita tentang shelter/klinik
+  operatingYear   Int?                   // Tahun berdiri (misal: 2018)
+  catsRescued     Int      @default(0)   // Total rescue
+  services        String?  @db.Text
   
   isShelterVerified Boolean @default(false) 
 

@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import api from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
@@ -50,6 +50,24 @@ export default function UserHomeScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchData(); };
 
+  // --- LOGIC HELPER ---
+  const getCityFromAddress = (fullAddress) => {
+    if (!fullAddress) return 'Lokasi Tidak Diketahui';
+    const parts = fullAddress.split(',');
+    const cityPart = parts.find(p => p.trim().includes('Kota') || p.trim().includes('Kab')) || parts[2] || parts[0];
+    return cityPart.trim();
+  };
+
+  const formatAge = (totalMonths) => {
+    if (totalMonths < 12) return `${totalMonths} Bln`;
+    const years = Math.floor(totalMonths / 12);
+    const months = totalMonths % 12;
+    return months === 0 ? `${years} Thn` : `${years}th ${months}bln`;
+  };
+
+  // Logic Nickname: Prioritaskan nickname, kalau null pakai nama depan
+  const displayName = user?.nickname || user?.name?.split(' ')[0] || 'Teman';
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -67,9 +85,8 @@ export default function UserHomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- 1. HEADER INTEGRATED WITH DECORATION --- */}
+        {/* --- 1. HEADER --- */}
         <View style={styles.headerBlock}>
-           {/* Decorative Shapes Header */}
            <View style={styles.headerCircleTop} />
            <View style={styles.headerCircleBottom} />
            
@@ -77,7 +94,8 @@ export default function UserHomeScreen() {
               <View style={styles.headerContent}>
                 <View>
                   <Text style={styles.greetingSub}>Halo, Selamat Datang</Text>
-                  <Text style={styles.greetingName}>{user?.name?.split(' ')[0] || 'Teman'} ✨</Text>
+                  {/* FIX: Tampilkan Nickname atau Nama Depan */}
+                  <Text style={styles.greetingName}>{displayName} ✨</Text>
                 </View>
                 <TouchableOpacity activeOpacity={0.8} style={styles.profileBtn} onPress={() => router.push('/(tabs)/profile')}>
                   <Text style={styles.profileInitials}>{user?.name?.charAt(0) || 'U'}</Text>
@@ -86,7 +104,7 @@ export default function UserHomeScreen() {
            </SafeAreaView>
         </View>
 
-        {/* --- 2. SEARCH INTEGRATED --- */}
+        {/* --- 2. SEARCH --- */}
         <View style={styles.searchSection}>
           <View style={styles.searchContainer}>
             <Ionicons name="search-outline" size={20} color="#BBB" style={{marginRight: 10}} />
@@ -97,18 +115,17 @@ export default function UserHomeScreen() {
           </View>
         </View>
 
-        {/* --- 3. QUICK MENU --- */}
+        {/* --- 3. MENU --- */}
         <View style={styles.menuContainer}>
-          <MenuIcon icon="hospital-building" color="#455A64" label="Klinik" onPress={() => router.push('/clinic-gallery')} />
+          <MenuIcon icon="hospital-building" color="#455A64" label="Klinik" onPress={() => router.push('/shelter-gallery')} />
           <MenuIcon icon="heart-multiple" color="#D81B60" label="Donasi" onPress={() => router.push('/donation-gallery')} />
           <MenuIcon icon="book-open-page-variant" color="#2E7D32" label="Panduan" onPress={() => router.push('/guide')} />
           <MenuIcon icon="history" color="#F57C00" label="Riwayat" onPress={() => router.push('/history')} />
         </View>
 
-        {/* --- 4. HERO BANNER WITH DECORATION --- */}
+        {/* --- 4. HERO --- */}
         <View style={styles.heroWrapper}>
           <View style={styles.heroCard}>
-            {/* Decorative Shapes Hero */}
             <View style={styles.heroDecorationCircle} />
             <View style={styles.heroDecorationLine} />
 
@@ -126,27 +143,40 @@ export default function UserHomeScreen() {
           </View>
         </View>
 
-        {/* --- 5. ADOPSI SECTION --- */}
+        {/* --- 5. ADOPSI SECTION (FIXED CARD & NAVIGATION) --- */}
         <SectionHeader title="Siap Diadopsi" onPress={() => router.push('/adoption-gallery')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
             {cats.map((cat) => (
-                <TouchableOpacity key={cat.id} activeOpacity={0.9} style={styles.catCard}>
-                    <Image source={{ uri: cat.imageUrl }} style={styles.catImage} />
-                    <View style={[styles.genderBadge, { backgroundColor: cat.gender === 'Jantan' ? 'rgba(25, 118, 210, 0.9)' : 'rgba(194, 24, 91, 0.9)' }]}>
-                       <MaterialCommunityIcons name={cat.gender === 'Jantan' ? 'gender-male' : 'gender-female'} size={12} color="#FFF" />
+                <TouchableOpacity 
+                  key={cat.id} 
+                  activeOpacity={0.9} 
+                  style={styles.catCard}
+                  onPress={() => router.push({ pathname: '/cat-detail', params: { id: cat.id } })} // Navigasi ke Detail
+                >
+                    <Image source={{ uri: cat.images?.split(',')[0] }} style={styles.catImage} />
+                    
+                    <View style={[styles.genderBadge, { backgroundColor: cat.gender === 'Jantan' ? '#E3F2FD' : '#FCE4EC' }]}>
+                       <MaterialCommunityIcons name={cat.gender === 'Jantan' ? 'gender-male' : 'gender-female'} size={12} color={cat.gender === 'Jantan' ? '#1976D2' : '#C2185B'} />
                     </View>
+                    
                     <View style={styles.catInfo}>
                         <Text style={styles.catName} numberOfLines={1}>{cat.name}</Text>
-                        <Text style={styles.catBreedText} numberOfLines={1}>{cat.breed}</Text>
+                        
+                        {/* Tags Mini (Personality/Health) */}
+                        <View style={styles.miniTagWrapper}>
+                           {cat.personality?.split(',').slice(0, 2).map((p, i) => (
+                             <View key={i} style={styles.miniTagPerso}><Text style={styles.miniTagText}>{p}</Text></View>
+                           ))}
+                        </View>
+
                         <View style={styles.metaRow}>
                            <View style={styles.metaItem}>
-                              <Ionicons name="calendar-outline" size={12} color={COLORS.textSub} />
-                              <Text style={styles.metaLabel}>{cat.age} Thn</Text>
+                              <Ionicons name="location-sharp" size={10} color={COLORS.secondary} />
+                              <Text style={styles.metaLabel} numberOfLines={1}>
+                                {getCityFromAddress(cat.shelter?.shelterAddress)}
+                              </Text>
                            </View>
-                           <View style={styles.metaItem}>
-                              <Ionicons name="location-outline" size={12} color={COLORS.textSub} />
-                              <Text style={styles.metaLabel}>Bdg</Text>
-                           </View>
+                           <Text style={styles.ageLabel}>{formatAge(cat.age)}</Text>
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -162,7 +192,7 @@ export default function UserHomeScreen() {
                     <View style={styles.campInfo}>
                         <Text style={styles.campaignTitle} numberOfLines={2}>{camp.title}</Text>
                         <View style={styles.progressBarBg}>
-                           <View style={[styles.progressBarFill, { width: `${(camp.currentAmount/camp.targetAmount)*100}%` }]} />
+                           <View style={[styles.progressBarFill, { width: `${Math.min(100, (camp.currentAmount/camp.targetAmount)*100)}%` }]} />
                         </View>
                         <View style={styles.campStatsRow}>
                            <Text style={styles.campValue}>Rp {parseInt(camp.currentAmount).toLocaleString()}</Text>
@@ -199,32 +229,15 @@ const styles = StyleSheet.create({
   mainWrapper: { flex: 1, backgroundColor: COLORS.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
-  // HEADER DECORATION
   headerBlock: { 
     backgroundColor: COLORS.primary, 
     paddingBottom: 60, 
     borderBottomLeftRadius: 30, 
     borderBottomRightRadius: 30,
-    overflow: 'hidden' // Biar shapes kepotong rapi
+    overflow: 'hidden'
   },
-  headerCircleTop: {
-    position: 'absolute',
-    top: -50,
-    right: -20,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)'
-  },
-  headerCircleBottom: {
-    position: 'absolute',
-    bottom: -20,
-    left: -30,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)'
-  },
+  headerCircleTop: { position: 'absolute', top: -50, right: -20, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+  headerCircleBottom: { position: 'absolute', bottom: -20, left: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255, 255, 255, 0.03)' },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginTop: 20 },
   greetingSub: { fontSize: 13, color: 'rgba(255,255,255,0.6)', letterSpacing: 0.5 },
   greetingName: { fontSize: 22, fontWeight: '800', color: '#FFF', marginTop: 4 },
@@ -241,32 +254,10 @@ const styles = StyleSheet.create({
   menuIconBox: { width: 60, height: 60, borderRadius: 20, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
   menuText: { fontSize: 12, color: COLORS.primary, fontWeight: '700' },
   
-  // HERO DECORATION
   heroWrapper: { paddingHorizontal: 24, marginVertical: 25 },
-  heroCard: { 
-    backgroundColor: COLORS.secondary, 
-    borderRadius: 25, 
-    padding: 24,
-    overflow: 'hidden' // Penting buat dekorasi shapes
-  },
-  heroDecorationCircle: {
-    position: 'absolute',
-    bottom: -30,
-    right: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)'
-  },
-  heroDecorationLine: {
-    position: 'absolute',
-    top: 10,
-    left: 100,
-    width: 100,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    transform: [{ rotate: '45deg' }]
-  },
+  heroCard: { backgroundColor: COLORS.secondary, borderRadius: 25, padding: 24, overflow: 'hidden' },
+  heroDecorationCircle: { position: 'absolute', bottom: -30, right: -20, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  heroDecorationLine: { position: 'absolute', top: 10, left: 100, width: 100, height: 2, backgroundColor: 'rgba(255, 255, 255, 0.05)', transform: [{ rotate: '45deg' }] },
   heroContent: { flexDirection: 'row', alignItems: 'center' },
   heroTextContainer: { flex: 1 },
   heroTitle: { fontSize: 22, fontWeight: '900', color: '#FFF' },
@@ -280,6 +271,7 @@ const styles = StyleSheet.create({
   seeAllText: { fontSize: 13, color: COLORS.secondary, fontWeight: '700' },
   horizontalList: { paddingLeft: 24, paddingRight: 10, paddingBottom: 15 },
 
+  // --- CAT CARD STYLES (MATCHING GALLERY) ---
   catCard: {
     width: 155,
     backgroundColor: COLORS.card,
@@ -295,13 +287,18 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
   },
   catImage: { width: '100%', height: 160 },
-  genderBadge: { position: 'absolute', top: 10, right: 10, width: 24, height: 24, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  genderBadge: { position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   catInfo: { padding: 12 },
-  catName: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
-  catBreedText: { fontSize: 12, color: COLORS.textSub, marginTop: 2, marginBottom: 10 },
-  metaRow: { flexDirection: 'row', gap: 8 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaLabel: { fontSize: 11, color: COLORS.textSub, fontWeight: '600' },
+  catName: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  
+  miniTagWrapper: { flexDirection: 'row', gap: 4, marginTop: 6, marginBottom: 10 },
+  miniTagPerso: { backgroundColor: '#F4A26120', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+  miniTagText: { fontSize: 9, fontWeight: '800', color: COLORS.secondary },
+
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F5F5F5', paddingTop: 8 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1, marginRight: 8 },
+  metaLabel: { fontSize: 10, color: COLORS.textSub, fontWeight: '700' },
+  ageLabel: { fontSize: 10, color: COLORS.primary, fontWeight: '900' },
 
   campaignCard: { width: 220, backgroundColor: COLORS.card, borderRadius: 22, marginRight: 15, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.divider },
   campaignImage: { width: '100%', height: 120 },
@@ -312,4 +309,4 @@ const styles = StyleSheet.create({
   campStatsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   campValue: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
   campPercent: { fontSize: 12, color: COLORS.accent, fontWeight: 'bold' }
-})
+});

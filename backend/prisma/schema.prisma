@@ -9,40 +9,44 @@ datasource db {
 
 // --- USER & ROLES ---
 model User {
-  id              Int      @id @default(autoincrement())
-  name            String
-  email           String   @unique
-  password        String
-  role            Role     @default(USER)
-
-  nickname        String?
-  phoneNumber     String?
+  id               Int      @id @default(autoincrement())
+  name             String
+  email            String   @unique
+  password         String
+  role             Role     @default(USER)
+  photoProfile     String?  @db.Text
+  nickname         String?
+  phoneNumber      String?
   
   // --- DATA SHELTER & KLINIK ---
-  shelterAddress  String?  @db.Text
-  isClinic        Boolean  @default(false) 
-  clinicOpenHours String?  
-  documentKtp     String?  // Field baru untuk path KTP
-  shelterPhotos   String?  @db.Text // Field baru untuk path banyak foto (comma separated)
+  shelterAddress   String?  @db.Text
+  isClinic         Boolean  @default(false)
+  clinicOpenHours  String?
+  documentKtp      String?
+  shelterPhotos    String?  @db.Text
+  description      String?  @db.Text
+  operatingYear    Int?
+  catsRescued      Int      @default(0)
+  services         String?  @db.Text
+  isShelterVerified Boolean @default(false)
 
-  description     String?  @db.Text      // Cerita tentang shelter/klinik
-  operatingYear   Int?                   // Tahun berdiri (misal: 2018)
-  catsRescued     Int      @default(0)   // Total rescue
-  services        String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   
-  isShelterVerified Boolean @default(false) 
+  // Relasi Data
+  adoptions        Adoption[]
+  reports          Report[]
+  cats             Cat[]
+  campaigns        Campaign[]
+  donations        Donation[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // --- RELASI CHAT (FIXED) ---
+  // Relasi ke ChatRoom
+  chatRoomsAsOne   ChatRoom[] @relation("UserOneRooms")
+  chatRoomsAsTwo   ChatRoom[] @relation("UserTwoRooms")
   
-  // Relasi tetap sama seperti sebelumnya
-  adoptions       Adoption[]      
-  reports         Report[]        
-  cats            Cat[]           
-  campaigns       Campaign[]      
-  donations       Donation[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
+  // Relasi ke Message (Hanya yang dikirim oleh user ini)
+  sentMessages     Message[]  @relation("UserMessages")
 }
 
 // --- KUCING (PRODUK) ---
@@ -165,6 +169,9 @@ model Report {
   // Identitas Pelapor
   userId          Int?     // Nullable jika Guest
   user            User?    @relation(fields: [userId], references: [id])
+
+  rescuerId   Int?
+
   reporterName    String?  // Wajib jika userId null
   reporterPhone   String?  // Wajib jika userId null
 
@@ -173,8 +180,8 @@ model Report {
   description     String?  @db.Text
   
   // Media
-  imageUrl        String
-  videoUrl        String?
+  imageUrl        String   @db.Text // TAMBAHKAN @db.Text DISINI
+  videoUrl        String?  @db.Text // Tambahin juga buat jaga-jaga kalau link video panjang
 
   // Lokasi
   address         String   @db.Text
@@ -189,18 +196,41 @@ model Report {
 }
 
 // --- CHAT (REAL TIME) ---
+model ChatRoom {
+  id            Int       @id @default(autoincrement())
+  
+  userOneId     Int
+  userOne       User      @relation("UserOneRooms", fields: [userOneId], references: [id])
+  userTwoId     Int
+  userTwo       User      @relation("UserTwoRooms", fields: [userTwoId], references: [id])
+
+  // Indikator Urusan (Nullable)
+  adoptionId    Int?
+  reportId      Int?
+  
+  messages      Message[]
+  lastMessage   String?   @db.Text
+  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+
+  // Biar ga ada duplikat room untuk konteks yang sama
+  @@unique([userOneId, userTwoId, adoptionId, reportId])
+}
+
 model Message {
-  id        Int      @id @default(autoincrement())
-  content   String   @db.Text
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text
   
-  senderId  Int
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  // Siapa yang kirim
+  senderId   Int
+  sender     User     @relation("UserMessages", fields: [senderId], references: [id])
   
-  receiverId Int
-  receiver   User    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  // Di room mana
+  roomId     Int
+  room       ChatRoom @relation(fields: [roomId], references: [id])
   
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 // --- ENUMS ---

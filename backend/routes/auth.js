@@ -55,6 +55,44 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// backend/routes/auth.js
+
+// 1. Tambahkan konfigurasi multer khusus untuk profile
+const profileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/profiles';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Penamaan file: userId_timestamp.jpg agar unik
+    cb(null, `profile_${req.user.userId}_${Date.now()}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadProfile = multer({ storage: profileStorage });
+
+// 2. Endpoint Baru: Update Photo Profile
+router.put('/update-photo', authenticateToken, uploadProfile.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'Tidak ada file yang diunggah' });
+
+    const photoPath = `/uploads/profiles/${req.file.filename}`;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { photoProfile: photoPath }
+    });
+
+    res.json({ 
+      message: 'Foto profil diperbarui', 
+      photoProfile: photoPath 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal upload foto' });
+  }
+});
+
 // --- ROUTES ---
 
 // 1. REGISTER
@@ -206,21 +244,43 @@ router.get('/activities', authenticateToken, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    const adoptions = await prisma.adoption.findMany({
-      where: { userId: userId },
-      include: { 
-        cat: {
-          include: {
-            shelter: { select: { shelterAddress: true, name: true } } // Ambil lokasi dari user shelter
-          }
-        } 
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+const adoptions = await prisma.adoption.findMany({
+  where: { userId: userId },
+  include: { 
+    cat: {
+      include: {
+        shelter: { 
+          select: { 
+            id: true,
+            name: true, 
+            nickname: true,
+            shelterAddress: true, 
+            shelterPhotos: true // <--- WAJIB ADA AGAR FOTO MUNCUL
+          } 
+        }
+      } 
+    } 
+  },
+  orderBy: { createdAt: 'desc' }
+});
 
     const donations = await prisma.donation.findMany({
       where: { userId: userId },
-      include: { campaign: true },
+      include: { 
+        campaign: {
+            include: {
+            shelter: {
+                select: {
+                id: true,
+                name: true,
+                nickname: true,
+                shelterAddress: true,
+                shelterPhotos: true
+                }
+            }
+            }
+        }
+    },
       orderBy: { createdAt: 'desc' }
     });
 

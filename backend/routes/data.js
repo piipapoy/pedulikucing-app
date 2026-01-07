@@ -166,7 +166,7 @@ router.get('/campaigns/:id', async (req, res) => {
           where: { status: 'COMPLETED' },
           orderBy: { createdAt: 'desc' },
           include: {
-            user: { select: { name: true } } // Nama donatur
+            user: { select: { name: true, photoProfile: true} } // Nama donatur
           }
         },
         updates: {
@@ -183,6 +183,49 @@ router.get('/campaigns/:id', async (req, res) => {
   } catch (error) {
     console.error("Error detail campaign:", error);
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// backend/routes/data.js
+
+// Tambahkan route ini di bawah route campaign
+router.post('/donate', authenticateToken, async (req, res) => {
+  const { campaignId, amount, paymentMethod, isAnonymous, message } = req.body;
+  const userId = req.user.userId;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Buat record donasi dengan status COMPLETED (karena ini mock payment)
+      const donation = await tx.donation.create({
+        data: {
+          amount: parseInt(amount),
+          paymentMethod,
+          isAnonymous: isAnonymous || false,
+          message: message || null,
+          status: 'COMPLETED',
+          userId: parseInt(userId),
+          campaignId: parseInt(campaignId),
+        },
+      });
+
+      // 2. Update currentAmount di Campaign secara otomatis
+      const updatedCampaign = await tx.campaign.update({
+        where: { id: parseInt(campaignId) },
+        data: {
+          currentAmount: { increment: parseInt(amount) },
+        },
+      });
+
+      return { donation, updatedCampaign };
+    });
+
+    res.status(201).json({ 
+      message: 'Donasi berhasil disinkronkan!', 
+      data: result 
+    });
+  } catch (error) {
+    console.error('Donation Sync Error:', error);
+    res.status(500).json({ message: 'Gagal memproses donasi', error: error.message });
   }
 });
 

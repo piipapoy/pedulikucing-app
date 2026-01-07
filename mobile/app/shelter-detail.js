@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import api from '../src/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -65,7 +66,23 @@ export default function ShelterDetail() {
     Linking.openURL(url);
   };
 
-  const handleChat = () => router.push('/(tabs)/chat');
+const handleChatShelter = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    // Cukup kirim ID shelter, biar sistem Room per-user yang handle
+    const res = await api.post('/chat/room/init', 
+      { userTwoId: shelter.id }, 
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    router.push({
+      pathname: '/chat-room',
+      params: { roomId: res.data.id, name: shelter.name, avatar: shelter.photoProfile }
+    });
+  } catch (error) {
+    Alert.alert("Error", "Gagal memulai chat.");
+  }
+};
 
   // Helper Umur
   const formatAge = (totalMonths) => {
@@ -270,31 +287,39 @@ export default function ShelterDetail() {
 
         {/* TAB 3: CAMPAIGNS (Placeholder dulu) */}
         {activeTab === 'donation' && (
-          <View>
-            {shelterCampaigns.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <MaterialCommunityIcons name="charity" size={40} color="#DDD" />
-                <Text style={styles.emptyText}>Belum ada campaign donasi aktif.</Text>
-              </View>
-            ) : (
-              shelterCampaigns.map(camp => (
-                <TouchableOpacity key={camp.id} style={styles.campCard} activeOpacity={0.9}>
-                  <Image source={{ uri: camp.imageUrl }} style={styles.campImg} />
-                  <View style={styles.campInfo}>
-                    <Text style={styles.campTitle} numberOfLines={2}>{camp.title}</Text>
-                    <View style={styles.progressBg}>
-                      <View style={[styles.progressFill, { width: `${Math.min(100, (camp.currentAmount/camp.targetAmount)*100)}%` }]} />
-                    </View>
-                    <View style={styles.campRow}>
-                      <Text style={styles.campStats}>Rp {parseInt(camp.currentAmount).toLocaleString()}</Text>
-                      <Text style={styles.campPercent}>{Math.round((camp.currentAmount/camp.targetAmount)*100)}%</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
+  <View>
+    {shelterCampaigns.length === 0 ? (
+      <View style={styles.emptyBox}>
+        <MaterialCommunityIcons name="charity" size={40} color="#DDD" />
+        <Text style={styles.emptyText}>Belum ada campaign donasi aktif.</Text>
+      </View>
+    ) : (
+      shelterCampaigns.map(camp => (
+        <TouchableOpacity 
+          key={camp.id} 
+          style={styles.campCard} 
+          activeOpacity={0.9}
+          onPress={() => router.push({ 
+            pathname: '/donation-detail', 
+            params: { id: camp.id } 
+          })}
+        >
+          <Image source={{ uri: camp.imageUrl }} style={styles.campImg} />
+          <View style={styles.campInfo}>
+            <Text style={styles.campTitle} numberOfLines={2}>{camp.title}</Text>
+            <View style={styles.progressBg}>
+              <View style={[styles.progressFill, { width: `${Math.min(100, (camp.currentAmount/camp.targetAmount)*100)}%` }]} />
+            </View>
+            <View style={styles.campRow}>
+              <Text style={styles.campStats}>Rp {parseInt(camp.currentAmount).toLocaleString()}</Text>
+              <Text style={styles.campPercent}>{Math.round((camp.currentAmount/camp.targetAmount)*100)}%</Text>
+            </View>
           </View>
-        )}
+        </TouchableOpacity>
+      ))
+    )}
+  </View>
+)}
 
         {/* TAB 4: GALERI (NEW) */}
         {activeTab === 'gallery' && (
@@ -311,7 +336,7 @@ export default function ShelterDetail() {
 
       {/* FIXED FOOTER */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleChat}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleChatShelter}>
           <Text style={styles.primaryBtnText}>Chat Shelter</Text>
           <Feather name="message-circle" size={20} color="#FFF" />
         </TouchableOpacity>

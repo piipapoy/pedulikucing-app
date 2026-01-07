@@ -8,6 +8,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import api from '../../src/services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -83,6 +85,78 @@ export default function ProfileScreen() {
       }
     ]);
   };
+
+  const handlePickImage = async () => {
+  // Minta izin galeri
+  const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (permissionResult.granted === false) {
+    Alert.alert("Izin Ditolak", "Aplikasi butuh akses galeri untuk mengganti foto.");
+    return;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.5,
+  });
+
+  if (!result.canceled) {
+    uploadPhoto(result.assets[0].uri);
+  }
+};
+
+const uploadPhoto = async (uri) => {
+  setLoading(true);
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const formData = new FormData();
+    formData.append('photo', {
+      uri,
+      name: `profile_${user.id}.jpg`,
+      type: 'image/jpeg',
+    });
+
+    const res = await api.put('/auth/update-photo', formData, {
+      headers: { 
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}` 
+      }
+    });
+
+    // 1. Ambil data user lama dari AsyncStorage
+    const storedData = await AsyncStorage.getItem('userData');
+    const parsedData = JSON.parse(storedData);
+
+    // 2. Update field photoProfile-nya saja
+    const updatedData = { ...parsedData, photoProfile: res.data.photoProfile };
+
+    // 3. Simpan kembali ke AsyncStorage dan Update State
+    await AsyncStorage.setItem('userData', JSON.stringify(updatedData));
+    setUser(updatedData); // Ini akan memicu re-render dan menampilkan foto
+
+    Alert.alert("Sukses", "Foto profil berhasil diganti!");
+  } catch (error) {
+    console.error(error);
+    Alert.alert("Gagal", "Gagal mengunggah foto profil.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+<TouchableOpacity style={styles.avatarContainer} onPress={handlePickImage}>
+  {user?.photoProfile ? (
+    <Image 
+      source={{ uri: `${api.defaults.baseURL.replace('/api', '')}${user.photoProfile}` }} 
+      style={styles.avatarImage} 
+    />
+  ) : (
+    <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+  )}
+  <View style={styles.cameraIconBadge}>
+    <Feather name="camera" size={14} color="#FFF" />
+  </View>
+</TouchableOpacity>
 
   // --- LOGIC GANTI PASSWORD ---
   const handleVerifyCurrentPass = async () => {
@@ -231,9 +305,31 @@ export default function ProfileScreen() {
         {/* HEADER */}
         <View style={styles.headerBlock}>
            <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
-              <View style={styles.avatarContainer}>
-                  <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
-              </View>
+              <TouchableOpacity 
+      style={styles.avatarContainer} 
+      // Langsung buka galeri jika sedang mode edit
+      onPress={() => isEditing && handlePickImage()} 
+      // Matikan efek klik jika tidak sedang edit
+      activeOpacity={isEditing ? 0.7 : 1}
+    >
+      {user?.photoProfile ? (
+        <Image 
+          source={{ uri: `${api.defaults.baseURL.replace('/api', '')}${user.photoProfile}` }} 
+          style={styles.avatarImage} 
+        />
+      ) : (
+        // Fallback inisial jika foto belum ada
+        <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+      )}
+
+      {/* OVERLAY PENSIL: Hanya muncul saat tombol 'Ubah' diklik (isEditing = true) */}
+      {isEditing && (
+        <View style={styles.editPhotoOverlay}>
+          <Feather name="edit-2" size={20} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold', marginTop: 4 }}>Ubah</Text>
+        </View>
+      )}
+    </TouchableOpacity>
               <Text style={styles.fullName}>{user?.name}</Text>
               <Text style={styles.emailText}>{user?.email}</Text>
               
@@ -440,7 +536,19 @@ const MenuItem = ({ icon, label, onPress, color = '#333' }) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   headerBlock: { paddingTop: 30, paddingBottom: 20, backgroundColor: '#FFF', borderBottomLeftRadius: 30, borderBottomRightRadius: 30, marginBottom: 20, elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#12464C', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#12464C', justifyContent: 'center', alignItems: 'center', marginBottom: 12, overflow: 'hidden', position: 'relative' },
+  avatarImage: { 
+    width: '100%', 
+    height: '100%', 
+    resizeMode: 'cover' 
+  },
+  // Tambahkan style overlay ini
+  editPhotoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)', // Hitam transparan
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   avatarText: { fontSize: 32, fontWeight: 'bold', color: '#FFF' },
   fullName: { fontSize: 20, fontWeight: 'bold', color: '#1A1A1A' },
   emailText: { fontSize: 14, color: '#888', marginTop: 2, marginBottom: 10 },

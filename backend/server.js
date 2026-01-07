@@ -9,6 +9,7 @@ dotenv.config();
 const authRoutes = require('./routes/auth');
 const dataRoutes = require('./routes/data'); // <--- Pastikan ini ada
 const reportRoutes = require('./routes/report');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/auth', authRoutes);
 app.use('/api/data', dataRoutes); // <--- PASTIKAN BARIS INI ADA DI SINI
 app.use('/api/report', reportRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Root Check
 app.get('/', (req, res) => {

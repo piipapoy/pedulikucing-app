@@ -153,7 +153,10 @@ export default function CatDetail() {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.adoptBtn}
-          onPress={() => console.log('Navigasi ke Form Adopsi Multi-step')}
+          onPress={() => router.push({
+            pathname: '/adoption-form',
+            params: { catId: cat.id, catName: cat.name }
+          })}
         >
           <Text style={styles.adoptBtnText}>Ajukan Adopsi</Text>
         </TouchableOpacity>

@@ -67,24 +67,39 @@ model Cat {
   updatedAt   DateTime @updatedAt
 }
 
-// --- ADOPSI ---
+// --- ADOPSI (UPGRADED) ---
 model Adoption {
-  id          Int            @id @default(autoincrement())
-  userId      Int
-  user        User           @relation(fields: [userId], references: [id])
-  catId       Int
-  cat         Cat            @relation(fields: [catId], references: [id])
+  id           Int            @id @default(autoincrement())
+  userId       Int
+  user         User           @relation(fields: [userId], references: [id])
+  catId        Int
+  cat          Cat            @relation(fields: [catId], references: [id])
   
-  address     String         @db.Text 
-  phone       String
-  reason      String         @db.Text
-  idCardImage String?        
-  houseImage  String?        
+  // --- Step 1: Data Diri ---
+  fullName     String         // Kita simpan manual kalau ada perubahan dari profil
+  phone        String
+  ktpNumber    String
+  socialMedia  String?
+  idCardImage  String         // Path foto KTP
 
-  status      AdoptionStatus @default(PENDING) 
+  // --- Step 2: Kondisi Tempat Tinggal ---
+  homeStatus   String         // Milik Sendiri, Sewa, Kos, Apartemen
+  isPermitted  Boolean        @default(true) // Izin pemilik hewan
+  stayingWith  String         // Contoh: "Pasangan, Anak-anak" (Comma separated)
+  childAges    String?        // Contoh: "5, 10" (Comma separated usia anak)
+  houseImages  String         @db.Text // Path banyak foto rumah (Comma separated)
+
+  // --- Step 3: Pengalaman & Komitmen ---
+  hasExperience Boolean       @default(true)
+  reason        String        @db.Text
+  job           String
+  movingPlan    String        @db.Text
+  isCommitted   Boolean       @default(true) // Komitmen biaya medis
+
+  status       AdoptionStatus @default(PENDING) 
   
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 // --- DONASI & CAMPAIGN ---

@@ -124,21 +124,38 @@ model Campaign {
   donations     Donation[]
 
   createdAt     DateTime @default(now())
+  deadline      DateTime?
   updatedAt     DateTime @updatedAt
+  updates       CampaignUpdate[]
+}
+
+// Model Baru
+model CampaignUpdate {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text // Bisa agak panjang dikit
+  campaignId  Int
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 model Donation {
-  id          Int      @id @default(autoincrement())
-  amount      Decimal
-  message     String?  
+  id            Int      @id @default(autoincrement())
+  amount        Int
+  message       String?  @db.Text
+  status        String   @default("PENDING") // PENDING, COMPLETED, FAILED
   
-  userId      Int?     
-  user        User?    @relation(fields: [userId], references: [id])
-  campaignId  Int
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
-
-  status      String   @default("SUCCESS") 
-  createdAt   DateTime @default(now())
+  // --- KOLOM BARU (REAL APP FEATURES) ---
+  paymentMethod String   @default("MANUAL") // Contoh: QRIS, GOPAY, BCA
+  isAnonymous   Boolean  @default(false)    // Fitur "Hamba Allah"
+  
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  
+  campaignId    Int
+  campaign      Campaign @relation(fields: [campaignId], references: [id])
+  
+  createdAt     DateTime @default(now())
 }
 
 // --- LAPORAN DARURAT ---

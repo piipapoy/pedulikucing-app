@@ -8,29 +8,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import api from '../src/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('laporan'); 
+  const [activeTab, setActiveTab] = useState(params.initialTab || 'laporan');
   const [activities, setActivities] = useState({ reports: [], adoptions: [], donations: [] });
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('SEMUA');
 
-  // --- LOGIC GAMBAR CERDAS (SOLUSI MASALAH LO) ---
   const resolveImageUrl = (rawPath) => {
     if (!rawPath) return null;
-    
-    // 1. Kalau sudah HTTP/HTTPS, pakai langsung (seperti di galeri)
-    if (rawPath.startsWith('http')) {
-      return rawPath;
-    }
-
-    // 2. Kalau path relatif, baru tempel Base URL
+    if (rawPath.startsWith('http')) return rawPath;
     const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, ''); 
-    const cleanPath = rawPath.trim().replace(/\\/g, '/'); // Hapus backslash Windows
+    const cleanPath = rawPath.trim().replace(/\\/g, '/');
     return `${baseUrl}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
   };
 
@@ -52,6 +47,12 @@ export default function HistoryScreen() {
   useEffect(() => { fetchActivities(); }, []);
   const onRefresh = () => { setRefreshing(true); fetchActivities(); };
 
+  useEffect(() => {
+    if (params.initialTab) {
+      setActiveTab(params.initialTab);
+    }
+  }, [params.initialTab]);
+
   const handleContact = (type) => {
     Alert.alert('Coming Soon', `Fitur chat dengan ${type} akan segera hadir.`);
   };
@@ -63,6 +64,11 @@ export default function HistoryScreen() {
     });
   };
 
+  // --- FUNGSI NAVIGASI DONASI BARU ---
+  const handleDonateAgain = () => {
+    router.push('/donation-gallery'); // Pastikan route ini benar
+  };
+
   const getStatusStyle = (status) => {
     switch (status) {
       case 'PENDING': return { bg: '#FFF3E0', text: '#EF6C00', label: 'Menunggu' };
@@ -71,6 +77,7 @@ export default function HistoryScreen() {
       case 'APPROVED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Disetujui' };
       case 'REJECTED': return { bg: '#FFEBEE', text: '#D32F2F', label: 'Ditolak' };
       case 'SUCCESS': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
+      case 'COMPLETED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
       default: return { bg: '#F5F5F5', text: '#666', label: status };
     }
   };
@@ -101,12 +108,10 @@ export default function HistoryScreen() {
     const status = getStatusStyle(item.status);
     const date = new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 
-    // --- IMPLEMENTASI LOGIC BARU ---
     let displayImg = null;
     if (activeTab === 'laporan') {
       displayImg = resolveImageUrl(item.imageUrl);
     } else if (activeTab === 'adopsi' && item.cat?.images) {
-      // Ambil string gambar pertama, lalu resolve
       const firstImg = item.cat.images.split(',')[0];
       displayImg = resolveImageUrl(firstImg);
     } else if (activeTab === 'donasi' && item.campaign?.imageUrl) {
@@ -192,15 +197,23 @@ export default function HistoryScreen() {
         ))}
       </View>
 
-      {activeTab !== 'donasi' && (
-        <View style={styles.filterContainer}>
+      {/* --- BAGIAN FILTER & TOMBOL DONASI (MODIFIKASI DI SINI) --- */}
+      <View style={styles.filterContainer}>
+        {activeTab === 'donasi' ? (
+          // TOMBOL KHUSUS TAB DONASI
+          <TouchableOpacity style={styles.donateCtaBtn} onPress={handleDonateAgain}>
+            <MaterialCommunityIcons name="hand-heart" size={18} color="#FFF" />
+            <Text style={styles.donateCtaText}>Mulai Donasi Baru</Text>
+          </TouchableOpacity>
+        ) : (
+          // FILTER UNTUK TAB LAIN
           <FlatList horizontal showsHorizontalScrollIndicator={false} data={['SEMUA', 'PENDING', 'ON_PROCESS', 'RESCUED', 'REJECTED']} keyExtractor={(i) => i} renderItem={({item}) => (
             <TouchableOpacity style={[styles.filterChip, selectedStatus === item && styles.activeChip]} onPress={() => setSelectedStatus(item)}>
               <Text style={[styles.filterChipText, selectedStatus === item && styles.activeChipText]}>{item === 'SEMUA' ? 'Semua Status' : getStatusStyle(item).label}</Text>
             </TouchableOpacity>
           )} contentContainerStyle={{ paddingHorizontal: 20 }} />
-        </View>
-      )}
+        )}
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#12464C" style={{ marginTop: 50 }} />
@@ -226,7 +239,13 @@ const styles = StyleSheet.create({
   activeTabItem: { borderBottomWidth: 2, borderBottomColor: '#12464C' },
   tabLabel: { fontSize: 14, color: '#999', fontWeight: '500' },
   activeTabLabel: { color: '#12464C', fontWeight: 'bold' },
+  
   filterContainer: { paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  
+  // STYLE BARU TOMBOL CTA DONASI
+  donateCtaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#12464C', marginHorizontal: 20, paddingVertical: 7.1, borderRadius: 12, gap: 8 },
+  donateCtaText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+
   filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', marginRight: 8, borderWidth: 1, borderColor: '#EEE' },
   activeChip: { backgroundColor: '#12464C', borderColor: '#12464C' },
   filterChipText: { fontSize: 12, color: '#666', fontWeight: '500' },

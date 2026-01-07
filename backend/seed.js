@@ -2,191 +2,221 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
-// --- GAMBAR KUCING (Variatif) ---
 const catImagesPool = [
-  'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba', // Putih
-  'https://images.unsplash.com/photo-1573865526739-10659fec78a5', // Abu
-  'https://images.unsplash.com/photo-1495360019602-e05980bf54fe', // Kitten
-  'https://images.unsplash.com/photo-1533738363-b7f9aef128ce', // Oren
-  'https://images.unsplash.com/photo-1529778873920-4da4926a7071', // Belang
-  'https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8', // Main
-  'https://images.unsplash.com/photo-1543852786-1cf6624b9987', // Hitam
+  'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba',
+  'https://images.unsplash.com/photo-1573865526739-10659fec78a5',
+  'https://images.unsplash.com/photo-1495360019602-e05980bf54fe',
+  'https://images.unsplash.com/photo-1533738363-b7f9aef128ce',
+  'https://images.unsplash.com/photo-1529778873920-4da4926a7071',
 ];
 
-// --- GAMBAR SHELTER ---
 const shelterPhotosPool = [
-  'https://images.unsplash.com/photo-1583337130417-3346a1be7dee', // Interior
-  'https://images.unsplash.com/photo-1519052537078-e6302a4968ef', // Ruang Rawat
-  'https://images.unsplash.com/photo-1505623776320-7edecf5f0771', // Halaman
-  'https://images.unsplash.com/photo-1599443015574-be5fe8a05783', // Grooming
+  'https://images.unsplash.com/photo-1583337130417-3346a1be7dee',
+  'https://images.unsplash.com/photo-1519052537078-e6302a4968ef',
+  'https://images.unsplash.com/photo-1505623776320-7edecf5f0771',
 ];
 
-// --- GAMBAR CAMPAIGN ---
 const campaignImagesPool = [
-  'https://images.unsplash.com/photo-1574158622682-e40e69881006', // Makanan
-  'https://images.unsplash.com/photo-1606425271394-c3ca9aa1fc06', // Operasi
-  'https://images.unsplash.com/photo-1623387641168-d9803ddd3f35', // Kandang
+  'https://images.unsplash.com/photo-1574158622682-e40e69881006',
+  'https://images.unsplash.com/photo-1606425271394-c3ca9aa1fc06',
+  'https://images.unsplash.com/photo-1623387641168-d9803ddd3f35',
 ];
 
 async function main() {
   const hashedPassword = await bcrypt.hash('password123', 10);
 
   console.log('--- 🧹 MEMBERSIHKAN DATABASE... ---');
-  // Hapus dari child ke parent biar ga error relation
+  // Hapus urut dari child ke parent biar gak error foreign key
+  await prisma.campaignUpdate.deleteMany();
   await prisma.donation.deleteMany();
   await prisma.adoption.deleteMany();
+  await prisma.report.deleteMany();
+  await prisma.message.deleteMany();
   await prisma.cat.deleteMany();
   await prisma.campaign.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log('--- 🏥 MEMASUKKAN DATA SHELTER & KLINIK... ---');
+  console.log('--- 🏥 MEMASUKKAN DATA SHELTER (DENGAN ALAMAT VALID)... ---');
 
-  /* =========================================
-     1. SEED USER (SHELTER MIXED TYPES)
-  ========================================= */
+  /* FORMAT ALAMAT (4 Bagian dipisah koma):
+     "Jalan Detail, Kecamatan, KOTA, Provinsi"
+     Frontend akan ambil index [2] -> KOTA
+  */
   const sheltersData = [
-    // 1. KLINIK LENGKAP (isClinic: TRUE)
     { 
       name: 'Rumah Kucing Bandung', 
       email: 'bdg@test.com', 
       nick: 'RK Bandung', 
-      addr: 'Jl. Dago Giri No. 10, Coblong, Kota Bandung, Jawa Barat', 
-      desc: 'Klinik & Shelter terpadu. Kami memiliki fasilitas rawat inap, isolasi, dan dokter hewan berjaga 24 jam.',
-      year: 2018,
-      rescued: 342,
-      services: 'Vaksin,Steril,Rawat Inap,UGD 24 Jam,USG',
-      isClinic: true,
-      openHours: '08:00 - 21:00 (Setiap Hari)'
+      // Alamat: Jalan, Kecamatan, KOTA, Provinsi
+      addr: 'Jl. Dago Giri No. 10, Kecamatan Coblong, Kota Bandung, Jawa Barat', 
+      desc: 'Klinik & Shelter terpadu fokus pada sterilisasi.', 
+      year: 2018, 
+      rescued: 342, 
+      services: 'Vaksin,Steril,Rawat Inap', 
+      isClinic: true, 
+      openHours: '08:00 - 21:00 (Setiap Hari)' 
     },
-    // 2. KLINIK MODERN (isClinic: TRUE)
     { 
       name: 'Paw Jakarta Selatan', 
       email: 'jkt@test.com', 
       nick: 'Paw Jaksel', 
-      addr: 'Jl. Kemang Raya No. 88, Mampang, Jakarta Selatan, DKI Jakarta', 
-      desc: 'Klinik hewan modern yang fokus pada kesejahteraan anabul. Profit klinik digunakan untuk subsidi steril kucing jalanan.',
-      year: 2020,
-      rescued: 128,
-      services: 'Grooming,Konsultasi,Hotel Kucing,Dental Care',
-      isClinic: true,
-      openHours: '09:00 - 17:00 (Senin-Sabtu)'
+      // Alamat: Jalan, Kecamatan, KOTA, Provinsi
+      addr: 'Jl. Kemang Raya No. 88, Mampang Prapatan, Jakarta Selatan, DKI Jakarta', 
+      desc: 'Klinik hewan modern dengan fasilitas lengkap.', 
+      year: 2020, 
+      rescued: 128, 
+      services: 'Grooming,Konsultasi,Operasi', 
+      isClinic: true, 
+      openHours: '09:00 - 17:00 (Senin-Sabtu)' 
     },
-    // 3. MURNI SHELTER / PENAMPUNGAN (isClinic: FALSE) -> TEST UI DISINI
     { 
       name: 'Meow Surabaya Rescue', 
       email: 'sby@test.com', 
       nick: 'Meow SBY', 
-      addr: 'Jl. Darmo No. 5, Wonokromo, Kota Surabaya, Jawa Timur', 
-      desc: 'Rumah singgah bagi kucing terlantar dan difabel. Kami fokus pada pemulihan trauma dan pencarian adopter.',
-      year: 2015,
-      rescued: 890,
-      services: 'Adopsi,Edukasi,Rescue Darurat', // Service non-medis
-      isClinic: false, // <--- PENTING: BUKAN KLINIK
-      openHours: '10:00 - 16:00 (Kunjungan Saja)'
-    },
-    // 4. MURNI SHELTER KECIL (isClinic: FALSE)
-    {
-      name: 'Omah Kucing Jogja',
-      email: 'jgj@test.com',
-      nick: 'Omah Jogja',
-      addr: 'Jl. Malioboro No. 12, Gedong Tengen, Kota Yogyakarta, DIY',
-      desc: 'Shelter rumahan sederhana. Kami merawat kucing pasar dan kucing yang dibuang.',
-      year: 2021,
-      rescued: 45,
-      services: 'Adopsi,Street Feeding',
-      isClinic: false, // <--- PENTING: BUKAN KLINIK
-      openHours: 'Hubungi via Chat'
+      // Alamat: Jalan, Kecamatan, KOTA, Provinsi
+      addr: 'Jl. Darmo No. 5, Wonokromo, Surabaya, Jawa Timur', 
+      desc: 'Rumah singgah sederhana untuk kucing jalanan.', 
+      year: 2015, 
+      rescued: 890, 
+      services: 'Adopsi,Edukasi,Rescue', 
+      isClinic: false, 
+      openHours: '10:00 - 16:00 (Kunjungan Saja)' 
     }
   ];
 
   const shelters = [];
-  
   for (let i = 0; i < sheltersData.length; i++) {
     const s = sheltersData[i];
-    // Assign foto shelter secara urut/random
-    const shelterPhoto = shelterPhotosPool[i % shelterPhotosPool.length];
-
     const user = await prisma.user.create({
       data: {
-        name: s.name,
-        email: s.email,
-        password: hashedPassword,
-        nickname: s.nick,
-        shelterAddress: s.addr,
-        role: 'SHELTER',
-        isShelterVerified: true,
-        phoneNumber: '08123456789',
-        isClinic: s.isClinic,
-        clinicOpenHours: s.openHours,
-        description: s.desc,
-        operatingYear: s.year,
-        catsRescued: s.rescued,
-        services: s.services,
-        shelterPhotos: shelterPhoto
+        name: s.name, 
+        email: s.email, 
+        password: hashedPassword, 
+        nickname: s.nick, 
+        shelterAddress: s.addr, // Address format fix
+        role: 'SHELTER', 
+        isShelterVerified: true, 
+        phoneNumber: '08123456789', 
+        isClinic: s.isClinic, 
+        clinicOpenHours: s.openHours, 
+        description: s.desc, 
+        operatingYear: s.year, 
+        catsRescued: s.rescued, 
+        services: s.services, 
+        shelterPhotos: shelterPhotosPool[i % shelterPhotosPool.length]
       }
     });
     shelters.push(user);
   }
 
-  /* =========================================
-     2. SEED KUCING (2-3 Kucing per Shelter)
-  ========================================= */
-  const catNames = ['Mochi', 'Luna', 'Simba', 'Oreo', 'Bella', 'Garfield', 'Kuro', 'Molly'];
-  const breeds = ['Domestik', 'Anggora', 'Persia', 'Maine Coon', 'British Shorthair'];
+  /* 2. SEED CAMPAIGN & DONATION */
+  console.log('--- 💰 MEMASUKKAN DATA DONASI & UPDATE... ---');
+  
+  const campaignTitles = ['Bantuan Pakan Darurat', 'Operasi Kaki Si Belang', 'Renovasi Atap Bocor'];
+  
+  for (let i = 0; i < 3; i++) {
+    const shelter = shelters[i];
+    
+    // Deadline: 30 hari dari sekarang
+    const deadlineDate = new Date();
+    deadlineDate.setDate(deadlineDate.getDate() + 30);
+
+    // Create Campaign (Awalnya 0)
+    const campaign = await prisma.campaign.create({
+      data: {
+        title: `${campaignTitles[i]} - ${shelter.nickname}`,
+        description: `Halo #OrangBaik, kami dari ${shelter.nickname} sedang membutuhkan bantuan mendesak. Dana akan digunakan sepenuhnya untuk keperluan anabul.`,
+        targetAmount: 5000000 + (i * 2000000), // 5jt, 7jt, 9jt
+        currentAmount: 0, // Nanti diupdate
+        imageUrl: campaignImagesPool[i % campaignImagesPool.length],
+        shelterId: shelter.id,
+        deadline: deadlineDate,
+        isApproved: true
+      }
+    });
+
+    // --- Create Campaign Updates (Kabar) ---
+    // Update 1: Awal
+    await prisma.campaignUpdate.create({
+      data: {
+        title: 'Campaign Dimulai!',
+        description: 'Terima kasih sudah berkunjung. Bantu share ke teman-teman ya agar target cepat tercapai!',
+        campaignId: campaign.id,
+        createdAt: campaign.createdAt 
+      }
+    });
+
+    // Update 2: Random progress
+    if (Math.random() > 0.3) {
+      await prisma.campaignUpdate.create({
+        data: {
+          title: 'Kondisi Terkini',
+          description: 'Anabul sudah mulai mau makan sedikit demi sedikit. Terima kasih doa dan dukungannya.',
+          campaignId: campaign.id,
+          createdAt: new Date() 
+        }
+      });
+    }
+
+    // --- Create Donations (Donatur) ---
+    let totalDonated = 0;
+    const donationCount = Math.floor(Math.random() * 6) + 3; // 3-8 donatur
+
+    const methods = ['QRIS', 'GOPAY', 'BCA', 'MANDIRI']; 
+
+    for (let j = 0; j < donationCount; j++) {
+      const amount = (Math.floor(Math.random() * 50) + 1) * 10000; // 10k - 500k
+      
+      await prisma.donation.create({
+        data: {
+          amount: amount,
+          status: 'COMPLETED',
+          paymentMethod: methods[Math.floor(Math.random() * methods.length)], 
+          isAnonymous: Math.random() > 0.6, // 40% kemungkinan Hamba Allah
+          message: Math.random() > 0.5 ? 'Semoga cepat sembuh ya meng!' : null,
+          userId: shelter.id, // Kita pinjam ID shelter buat jadi user donatur dummy
+          campaignId: campaign.id
+        }
+      });
+      totalDonated += amount;
+    }
+
+    // UPDATE Campaign Current Amount biar SYNC dengan total donasi
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { currentAmount: totalDonated }
+    });
+  }
+
+  /* 3. SEED CATS (Adopsi) */
+  console.log('--- 🐈 MEMASUKKAN DATA KUCING... ---');
+  const catNames = ['Mochi', 'Luna', 'Simba', 'Oreo', 'Garfield', 'Bella'];
   
   for (const shelter of shelters) {
-    // Tiap shelter dapet 2 kucing random
     for (let k = 0; k < 2; k++) {
       const name = catNames[Math.floor(Math.random() * catNames.length)];
-      const breed = breeds[Math.floor(Math.random() * breeds.length)];
-      const img = catImagesPool[Math.floor(Math.random() * catImagesPool.length)]; // Ambil random dari pool
-
       await prisma.cat.create({
         data: {
-          name: `${name} (${shelter.nickname})`, // Kasih penanda biar tau punya siapa
-          age: Math.floor(Math.random() * 5) + 1,
-          gender: Math.random() > 0.5 ? 'Jantan' : 'Betina',
-          breed: breed,
-          description: `Halo, aku ${name}. Aku sekarang dirawat di ${shelter.nickname}. Aku sehat dan siap diadopsi!`,
-          images: img,
-          personality: 'Manja,Aktif',
-          health: 'Vaksin,Sehat',
-          shelterId: shelter.id,
-          isApproved: true,
-          isAdopted: false
+          name: name, 
+          age: Math.floor(Math.random() * 5) + 1, 
+          gender: Math.random() > 0.5 ? 'Jantan' : 'Betina', 
+          breed: 'Domestik',
+          description: `Kucing lucu di ${shelter.nickname}. Sangat manja, sudah steril, dan butuh rumah baru yang hangat.`,
+          images: catImagesPool[k % catImagesPool.length],
+          personality: 'Manja,Aktif,Penurut', // CSV format
+          health: 'Sehat,Sudah Vaksin,Steril', // CSV format
+          shelterId: shelter.id, 
+          isApproved: true
         }
       });
     }
   }
 
-  /* =========================================
-     3. SEED CAMPAIGN (1 Campaign per Shelter)
-  ========================================= */
-  const campaignTitles = ['Bantuan Pakan', 'Operasi Kaki', 'Steril Subsidi', 'Renovasi Atap Shelter'];
-
-  for (let i = 0; i < shelters.length; i++) {
-    const shelter = shelters[i];
-    // Cuma shelter index 0, 1, 2 yang punya campaign (biar ada yang kosong buat tes empty state)
-    if (i < 3) {
-        await prisma.campaign.create({
-            data: {
-            title: `${campaignTitles[i]} - ${shelter.nickname}`,
-            description: `Kami membutuhkan bantuan teman-teman untuk program kebaikan di ${shelter.nickname}.`,
-            targetAmount: 5000000 + (i * 1000000),
-            currentAmount: 1500000 + (i * 500000),
-            imageUrl: campaignImagesPool[i % campaignImagesPool.length],
-            shelterId: shelter.id,
-            isApproved: true
-            }
-        });
-    }
-  }
-
-  console.log('✅ SEEDING SELESAI! Data sudah siap untuk simulasi.');
+  console.log('✅ SEEDING SELESAI! Data Alamat Valid (4 bagian).');
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error(e);
     process.exit(1);
   })

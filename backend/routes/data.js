@@ -116,16 +116,47 @@ router.post('/adopt', authenticateToken, upload.fields([{ name: 'documentKtp', m
   }
 });
 
-// 4. GET: SEMUA CAMPAIGN
-router.get('/campaigns', async (req, res) => {
+// 4. GET: DETAIL CAMPAIGN BY ID (SPECIFIC)
+router.get('/campaigns/:id', async (req, res) => {
   try {
-    const campaigns = await prisma.campaign.findMany({
-      where: { isApproved: true, isClosed: false },
-      orderBy: { createdAt: 'desc' },
+    const { id } = req.params;
+    
+    // Validasi ID harus angka
+    if (isNaN(id)) return res.status(400).json({ error: 'ID tidak valid' });
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        shelter: {
+          select: {
+            id: true,
+            nickname: true,
+            shelterAddress: true,
+            shelterPhotos: true,
+            isShelterVerified: true
+          }
+        },
+        donations: {
+          where: { status: 'COMPLETED' },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: { select: { name: true } } // Nama donatur
+          }
+        },
+        updates: {
+          orderBy: { createdAt: 'desc' } // Kabar terbaru
+        }
+      }
     });
-    res.json(campaigns);
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign tidak ditemukan di database' });
+    }
+
+    res.json(campaign);
   } catch (error) {
-    res.status(500).json({ error: 'Gagal ambil data campaign' });
+    console.error("Error detail campaign:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

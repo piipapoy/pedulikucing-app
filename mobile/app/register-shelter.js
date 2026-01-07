@@ -24,13 +24,21 @@ export default function RegisterShelterScreen() {
   const [formData, setFormData] = useState({
     shelterName: '',
     shelterPhone: '',
-    shelterAddress: '',
+    // shelterAddress akan kita generate dari addressComponents pas submit
     isClinic: false,
     selectedDays: [],
     openTime: '08:00',
     closeTime: '20:00',
     documentKtp: null,
     photoShelter: [] 
+  });
+
+  // State Khusus Alamat (Biar Terstruktur)
+  const [addressData, setAddressData] = useState({
+    province: '',
+    city: '',
+    district: '', // Kecamatan/Kelurahan
+    street: ''    // Jalan, No Rumah, RT/RW
   });
 
   // UI States
@@ -97,10 +105,19 @@ export default function RegisterShelterScreen() {
       setShowErrorModal(true);
       return;
     }
-    if (step === 2 && (!formData.shelterAddress || (formData.isClinic && formData.selectedDays.length === 0))) {
-      setErrorMessage('Harap lengkapi alamat dan jadwal operasional.');
-      setShowErrorModal(true);
-      return;
+    // Validasi Step 2 (Alamat Terstruktur)
+    if (step === 2) {
+      const { province, city, district, street } = addressData;
+      if (!province || !city || !district || !street) {
+        setErrorMessage('Harap lengkapi seluruh kolom alamat (Provinsi hingga Jalan).');
+        setShowErrorModal(true);
+        return;
+      }
+      if (formData.isClinic && formData.selectedDays.length === 0) {
+        setErrorMessage('Harap pilih jadwal operasional klinik.');
+        setShowErrorModal(true);
+        return;
+      }
     }
     setStep(step + 1);
   };
@@ -108,7 +125,7 @@ export default function RegisterShelterScreen() {
   const pickKtp = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.7,
@@ -130,7 +147,7 @@ export default function RegisterShelterScreen() {
     }
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         selectionLimit: 5 - formData.photoShelter.length,
         quality: 0.6,
@@ -165,7 +182,6 @@ export default function RegisterShelterScreen() {
     setFormData({ ...formData, selectedDays: updated });
   };
 
-  // VALIDASI DOKUMEN: Harus KTP & minimal 3 foto
   const handleTriggerOtp = () => {
     if (!formData.documentKtp) {
       setErrorMessage('Anda wajib mengunggah foto KTP pengelola.');
@@ -190,12 +206,15 @@ export default function RegisterShelterScreen() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
+      // Gabungkan Alamat jadi 1 String Format Standar
+      const fullAddress = `${addressData.street}, ${addressData.district}, ${addressData.city}, ${addressData.province}`;
+      
       const opHours = `${formData.openTime}-${formData.closeTime} (${formData.selectedDays.join(',')})`;
       
       const data = new FormData();
       data.append('nickname', formData.shelterName);
       data.append('phoneNumber', formData.shelterPhone);
-      data.append('shelterAddress', formData.shelterAddress);
+      data.append('shelterAddress', fullAddress); // Kirim yang sudah digabung
       data.append('isClinic', String(formData.isClinic));
       data.append('clinicOpenHours', formData.isClinic ? opHours : '');
 
@@ -223,7 +242,7 @@ export default function RegisterShelterScreen() {
       });
 
       setShowOtpModal(false);
-      setShowSuccessModal(true); // Pake Modal Sukses yang udah ada
+      setShowSuccessModal(true); 
     } catch (e) { 
       setErrorMessage('Gagal terhubung ke server. Coba lagi nanti.');
       setShowErrorModal(true);
@@ -278,13 +297,53 @@ export default function RegisterShelterScreen() {
 
         {step === 2 && (
           <View>
-            <Text style={styles.vibeTitle}>Lokasi & Jam Kerja</Text>
-            <Text style={styles.vibeDesc}>Pastikan lokasi akurat agar mudah dijangkau pelapor.</Text>
+            <Text style={styles.vibeTitle}>Lokasi & Operasional</Text>
+            <Text style={styles.vibeDesc}>Detail alamat membantu calon adopter menemukan Anda.</Text>
+            
+            {/* INPUT ALAMAT TERSTRUKTUR */}
             <View style={styles.inputCard}>
-              <Text style={styles.cardLabel}>ALAMAT FISIK</Text>
+              <Text style={styles.cardLabel}>DETAIL LOKASI</Text>
+              
+              <View style={styles.field}>
+                <MaterialCommunityIcons name="map-marker-radius" size={18} color="#999" style={styles.fieldIcon} />
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Provinsi (Contoh: Jawa Barat)" 
+                  value={addressData.province} 
+                  onChangeText={t => setAddressData({...addressData, province: t})} 
+                />
+              </View>
+
+              <View style={styles.field}>
+                <MaterialCommunityIcons name="city" size={18} color="#999" style={styles.fieldIcon} />
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Kota/Kabupaten" 
+                  value={addressData.city} 
+                  onChangeText={t => setAddressData({...addressData, city: t})} 
+                />
+              </View>
+
+              <View style={styles.field}>
+                <MaterialCommunityIcons name="home-group" size={18} color="#999" style={styles.fieldIcon} />
+                <TextInput 
+                  style={styles.textInput} 
+                  placeholder="Kecamatan/Kelurahan" 
+                  value={addressData.district} 
+                  onChangeText={t => setAddressData({...addressData, district: t})} 
+                />
+              </View>
+
               <View style={styles.addressContainer}>
                 <View style={styles.pinWrapper}><Feather name="map-pin" size={18} color="#999" /></View>
-                <TextInput style={styles.addressInput} multiline placeholder="Tulis alamat lengkap..." value={formData.shelterAddress} onChangeText={t => setFormData({...formData, shelterAddress: t})} placeholderTextColor="#999" />
+                <TextInput 
+                  style={styles.addressInput} 
+                  multiline 
+                  placeholder="Jalan, No. Rumah, RT/RW, Patokan..." 
+                  value={addressData.street} 
+                  onChangeText={t => setAddressData({...addressData, street: t})} 
+                  placeholderTextColor="#999" 
+                />
               </View>
             </View>
 
@@ -373,7 +432,7 @@ export default function RegisterShelterScreen() {
 
       <DateTimePickerModal isVisible={isTimePickerVisible} mode="time" onConfirm={handleConfirmTime} onCancel={() => setTimePickerVisibility(false)} is24Hour />
 
-      {/* MODAL OTP - FIXED Tombol Konfirmasi */}
+      {/* MODAL OTP */}
       <Modal animationType="fade" transparent={true} visible={showOtpModal} statusBarTranslucent={true}>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
@@ -395,7 +454,7 @@ export default function RegisterShelterScreen() {
         </View>
       </Modal>
 
-      {/* MODAL SUCCESS - FIXED Teks Tombol Selesai */}
+      {/* MODAL SUCCESS */}
       <Modal animationType="fade" transparent visible={showSuccessModal} statusBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -403,23 +462,15 @@ export default function RegisterShelterScreen() {
               <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}><Feather name="check-circle" size={40} color="#2E7D32" /></View>
               <Text style={styles.modalTitle}>Pendaftaran Terkirim!</Text>
               <Text style={styles.modalDesc}>Data Anda sedang ditinjau. Kami akan memberi notifikasi jika akun Anda sudah diverifikasi.</Text>
-<TouchableOpacity
-  style={styles.modalBtnPrimary}
-  onPress={() => {
-    setShowSuccessModal(false);
-    router.back();
-  }}
->
-  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>
-    Selesai
-  </Text>
-</TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => { setShowSuccessModal(false); router.back(); }}>
+                <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Selesai</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL ERROR - PAKE DESAIN YANG UDAH ADA */}
+      {/* MODAL ERROR */}
       <Modal animationType="fade" transparent={true} visible={showErrorModal} statusBarTranslucent={true}>
         <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>

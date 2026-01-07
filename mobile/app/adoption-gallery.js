@@ -60,6 +60,16 @@ export default function AdoptionGallery() {
     }
   };
 
+  // --- HELPER LOKASI DINAMIS ---
+  const getCityFromAddress = (fullAddress) => {
+    if (!fullAddress) return 'Indonesia';
+    const parts = fullAddress.split(',');
+    // Cari bagian yang mengandung "Kota" atau "Kabupaten"
+    // Kalau ga nemu, ambil bagian ke-3 (index 2) sbg default kota
+    const cityPart = parts.find(p => p.trim().includes('Kota') || p.trim().includes('Kab')) || parts[2] || parts[0];
+    return cityPart.trim();
+  };
+
   const formatAge = (totalMonths) => {
     if (totalMonths < 12) return `${totalMonths} Bln`;
     const years = Math.floor(totalMonths / 12);
@@ -105,7 +115,6 @@ export default function AdoptionGallery() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Fixed Header Section (Tidak ikut scroll) */}
       <View style={styles.fixedTopSection}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
@@ -141,11 +150,7 @@ export default function AdoptionGallery() {
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{marginTop: 50}} />
       ) : (
-        <ScrollView 
-          contentContainerStyle={styles.grid} 
-          showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[]} // Opsional jika ingin komponen tertentu sticky
-        >
+        <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
           <View style={styles.row}>
             {currentCats.map((cat) => (
               <TouchableOpacity key={cat.id} style={styles.card} onPress={() => router.push({ pathname: '/cat-detail', params: { id: cat.id } })}>
@@ -166,7 +171,10 @@ export default function AdoptionGallery() {
                   <View style={styles.cardFooter}>
                     <View style={styles.locBox}>
                       <Ionicons name="location-sharp" size={10} color={COLORS.secondary} />
-                      <Text style={styles.locText}>Bandung</Text>
+                      {/* FIX: LOKASI DINAMIS */}
+                      <Text style={styles.locText} numberOfLines={1}>
+                        {getCityFromAddress(cat.shelter?.shelterAddress)}
+                      </Text>
                     </View>
                     <Text style={styles.ageLabel}>{formatAge(cat.age)}</Text>
                   </View>
@@ -181,21 +189,11 @@ export default function AdoptionGallery() {
 
           {filteredCats.length > itemsPerPage && (
             <View style={styles.paginationContainer}>
-              <TouchableOpacity 
-                style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]} 
-                onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
+              <TouchableOpacity style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]} onPress={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
                 <Feather name="chevron-left" size={20} color={currentPage === 1 ? "#CCC" : COLORS.primary} />
               </TouchableOpacity>
-              <View style={styles.pageInfo}>
-                <Text style={styles.currentPageText}>{currentPage}</Text>
-              </View>
-              <TouchableOpacity 
-                style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]} 
-                onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
+              <View style={styles.pageInfo}><Text style={styles.currentPageText}>{currentPage}</Text></View>
+              <TouchableOpacity style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]} onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
                 <Feather name="chevron-right" size={20} color={currentPage === totalPages ? "#CCC" : COLORS.primary} />
               </TouchableOpacity>
             </View>
@@ -210,18 +208,13 @@ export default function AdoptionGallery() {
         </ScrollView>
       )}
 
-      {/* MODAL FILTER TETAP SAMA */}
+      {/* MODAL FILTER */}
       <Modal animationType="slide" transparent={true} visible={showFilterModal} statusBarTranslucent={true} onRequestClose={() => setShowFilterModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Filter Lanjutan</Text>
-                <Text style={styles.modalSubTitle}>Sesuaikan pencarianmu</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowFilterModal(false)} style={styles.closeBtn}>
-                <Feather name="x" size={24} color={COLORS.primary} />
-              </TouchableOpacity>
+              <View><Text style={styles.modalTitle}>Filter Lanjutan</Text><Text style={styles.modalSubTitle}>Sesuaikan pencarianmu</Text></View>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)} style={styles.closeBtn}><Feather name="x" size={24} color={COLORS.primary} /></TouchableOpacity>
             </View>
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               <FilterSection label="Jenis Kelamin" options={genders} selected={filter.gender} onSelect={(v) => setSingleFilter('gender', v)} isMulti={false} />
@@ -249,9 +242,7 @@ const FilterSection = ({ label, options, selected, onSelect, isMulti }) => (
         const isActive = isMulti ? selected.includes(opt) : selected === opt;
         return (
           <TouchableOpacity key={opt} style={[styles.optionBtn, isActive && styles.optionBtnActive]} onPress={() => onSelect(opt)}>
-            {isMulti && (
-              <Ionicons name={isActive ? "checkbox" : "square-outline"} size={16} color={isActive ? "#FFF" : "#CCC"} style={{marginRight: 6}} />
-            )}
+            {isMulti && <Ionicons name={isActive ? "checkbox" : "square-outline"} size={16} color={isActive ? "#FFF" : "#CCC"} style={{marginRight: 6}} />}
             <Text style={[styles.optionText, isActive && styles.optionTextActive]}>{opt}</Text>
           </TouchableOpacity>
         );
@@ -262,16 +253,8 @@ const FilterSection = ({ label, options, selected, onSelect, isMulti }) => (
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  // Bagian Header & Filter dibuat terpisah agar tidak ikut scroll utama
   fixedTopSection: {
-    backgroundColor: COLORS.background,
-    zIndex: 10,
-    elevation: 4, // Shadow untuk Android
-    shadowColor: '#000', // Shadow untuk iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    paddingBottom: 10,
+    backgroundColor: COLORS.background, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, paddingBottom: 10,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 60 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.primary },
@@ -285,7 +268,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   chipText: { fontSize: 13, color: '#777', fontWeight: '700' },
   chipTextActive: { color: '#FFF' },
-  // Berikan margin top pada grid scrollview agar tidak nempel dengan section atas yang fixed
   grid: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 50 },
   row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   card: { width: (width / 2) - 30, backgroundColor: '#FFF', borderRadius: 24, marginBottom: 20, elevation: 4, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, overflow: 'hidden' },
@@ -297,7 +279,7 @@ const styles = StyleSheet.create({
   miniTagHealth: { backgroundColor: '#EDF4F4', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
   miniTagText: { fontSize: 9, fontWeight: '800', color: COLORS.secondary },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F5F5F5', paddingTop: 8 },
-  locBox: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  locBox: { flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1, marginRight: 8 },
   locText: { fontSize: 10, color: COLORS.textSub, fontWeight: '700' },
   ageLabel: { fontSize: 10, color: COLORS.primary, fontWeight: '900' },
   miniGender: { position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.95)' },

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, 
-  Dimensions, ActivityIndicator, StatusBar
+  Dimensions, ActivityIndicator, StatusBar, Modal
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +25,11 @@ export default function CatDetail() {
   const router = useRouter();
   const [cat, setCat] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checkingProfile, setCheckingProfile] = useState(false); 
   const [activeImage, setActiveImage] = useState(0);
+  
+  // State untuk Custom Modal
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => { fetchCatDetail(); }, [id]);
 
@@ -40,12 +44,44 @@ export default function CatDetail() {
     }
   };
 
+  const getCityFromAddress = (fullAddress) => {
+    if (!fullAddress) return 'Lokasi Tidak Diketahui';
+    const parts = fullAddress.split(',');
+    const cityPart = parts.find(p => p.trim().includes('Kota') || p.trim().includes('Kab')) || parts[2] || parts[0];
+    return cityPart.trim();
+  };
+
   const formatAge = (totalMonths) => {
     if (totalMonths < 12) return `${totalMonths} Bulan`;
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
     if (months === 0) return `${years} Tahun`;
     return `${years} Thn ${months} Bln`;
+  };
+
+  // --- LOGIC BARU: CEK PROFIL ---
+  const handleAdopt = async () => {
+    setCheckingProfile(true);
+    try {
+      const res = await api.get('/auth/profile');
+      const user = res.data.user;
+
+      // Cek Nomor Telepon
+      if (!user.phoneNumber || user.phoneNumber.trim() === '') {
+        setShowProfileModal(true); // Tampilkan Modal Custom
+      } else {
+        router.push({
+          pathname: '/adoption-form',
+          params: { catId: cat.id, catName: cat.name }
+        });
+      }
+    } catch (error) {
+      // Error fetch profile bisa tetap pakai alert kecil atau modal error lain, 
+      // tapi untuk sekarang kita fokus ke flow validasi nomor.
+      console.log('Gagal cek profil');
+    } finally {
+      setCheckingProfile(false);
+    }
   };
 
   if (loading) return (
@@ -61,7 +97,7 @@ export default function CatDetail() {
       <StatusBar barStyle="light-content" translucent />
       <ScrollView showsVerticalScrollIndicator={false}>
         
-        {/* --- IMAGE SLIDER --- */}
+        {/* IMAGE SLIDER */}
         <View style={styles.imageContainer}>
           <ScrollView 
             horizontal pagingEnabled 
@@ -106,7 +142,7 @@ export default function CatDetail() {
 
           <View style={styles.statsRow}>
             <StatItem icon="time-outline" label="Umur" value={formatAge(cat.age)} />
-            <StatItem icon="location-outline" label="Lokasi" value="Bandung" />
+            <StatItem icon="location-outline" label="Lokasi" value={getCityFromAddress(cat.shelter?.shelterAddress)} />
             <StatItem icon="shield-checkmark-outline" label="Kesehatan" value="Prima" />
           </View>
 
@@ -115,7 +151,6 @@ export default function CatDetail() {
             <Text style={styles.description}>{cat.description}</Text>
           </View>
 
-          {/* FIX: Ganti <div> ke <View> agar tidak error */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Rekam Medis & Karakter</Text>
             <View style={styles.tagWrapper}>
@@ -150,17 +185,56 @@ export default function CatDetail() {
         </View>
       </ScrollView>
 
+      {/* FOOTER ACTION */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={styles.adoptBtn}
-          onPress={() => router.push({
-            pathname: '/adoption-form',
-            params: { catId: cat.id, catName: cat.name }
-          })}
+          style={[styles.adoptBtn, checkingProfile && { opacity: 0.8 }]}
+          onPress={handleAdopt} 
+          disabled={checkingProfile}
         >
-          <Text style={styles.adoptBtnText}>Ajukan Adopsi</Text>
+          {checkingProfile ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.adoptBtnText}>Ajukan Adopsi</Text>
+          )}
         </TouchableOpacity>
       </View>
+
+      {/* --- CUSTOM MODAL: PROFIL INCOMPLETE --- */}
+      <Modal animationType="fade" transparent visible={showProfileModal} statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={[styles.iconCircle, { backgroundColor: '#FFF3E0' }]}>
+                <Feather name="user-check" size={32} color="#EF6C00" />
+              </View>
+              <Text style={styles.modalTitle}>Lengkapi Profil</Text>
+              <Text style={styles.modalDesc}>
+                Shelter memerlukan nomor WhatsApp/Telepon aktif agar bisa menghubungi Anda untuk proses selanjutnya.
+              </Text>
+              
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={styles.modalBtnCancel} 
+                  onPress={() => setShowProfileModal(false)}
+                >
+                  <Text style={styles.modalBtnTextCancel}>Nanti Saja</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.modalBtnConfirm} 
+                  onPress={() => {
+                    setShowProfileModal(false);
+                    router.push('/(tabs)/profile');
+                  }}
+                >
+                  <Text style={styles.modalBtnTextConfirm}>Isi Sekarang</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -208,4 +282,17 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 25, paddingVertical: 20, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: COLORS.divider },
   adoptBtn: { height: 60, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   adoptBtnText: { fontSize: 17, fontWeight: '900', color: '#FFF' },
+  
+  // MODAL STYLES (MATCHING UI REGISTER SHELTER)
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { width: '85%' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center', width: '100%', elevation: 5 },
+  iconCircle: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  modalDesc: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalBtnCancel: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F5F5F5', alignItems: 'center' },
+  modalBtnTextCancel: { color: '#666', fontWeight: 'bold' },
+  modalBtnConfirm: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center' },
+  modalBtnTextConfirm: { color: '#FFF', fontWeight: 'bold' },
 });

@@ -206,16 +206,25 @@ router.get('/activities', authenticateToken, async (req, res) => {
       where: { userId: userId },
       orderBy: { createdAt: 'desc' }
     });
+
     const adoptions = await prisma.adoption.findMany({
       where: { userId: userId },
-      include: { cat: true },
+      include: { 
+        cat: {
+          include: {
+            shelter: { select: { shelterAddress: true, name: true } } // Ambil lokasi dari user shelter
+          }
+        } 
+      },
       orderBy: { createdAt: 'desc' }
     });
+
     const donations = await prisma.donation.findMany({
       where: { userId: userId },
       include: { campaign: true },
       orderBy: { createdAt: 'desc' }
     });
+
     res.json({ reports, adoptions, donations });
   } catch (error) {
     res.status(500).json({ message: 'Gagal mengambil riwayat aktivitas' });

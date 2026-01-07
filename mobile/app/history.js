@@ -19,6 +19,21 @@ export default function HistoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('SEMUA');
 
+  // --- LOGIC GAMBAR CERDAS (SOLUSI MASALAH LO) ---
+  const resolveImageUrl = (rawPath) => {
+    if (!rawPath) return null;
+    
+    // 1. Kalau sudah HTTP/HTTPS, pakai langsung (seperti di galeri)
+    if (rawPath.startsWith('http')) {
+      return rawPath;
+    }
+
+    // 2. Kalau path relatif, baru tempel Base URL
+    const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, ''); 
+    const cleanPath = rawPath.trim().replace(/\\/g, '/'); // Hapus backslash Windows
+    return `${baseUrl}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+  };
+
   const fetchActivities = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -34,20 +49,13 @@ export default function HistoryScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchActivities();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchActivities();
-  };
+  useEffect(() => { fetchActivities(); }, []);
+  const onRefresh = () => { setRefreshing(true); fetchActivities(); };
 
   const handleContact = (type) => {
     Alert.alert('Coming Soon', `Fitur chat dengan ${type} akan segera hadir.`);
   };
 
-  // Fungsi navigasi ke detail
   const navigateToDetail = (item, type) => {
     router.push({
       pathname: '/history-detail',
@@ -60,6 +68,7 @@ export default function HistoryScreen() {
       case 'PENDING': return { bg: '#FFF3E0', text: '#EF6C00', label: 'Menunggu' };
       case 'ON_PROCESS': return { bg: '#E3F2FD', text: '#1976D2', label: 'Diproses' };
       case 'RESCUED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Selesai' };
+      case 'APPROVED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Disetujui' };
       case 'REJECTED': return { bg: '#FFEBEE', text: '#D32F2F', label: 'Ditolak' };
       case 'SUCCESS': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
       default: return { bg: '#F5F5F5', text: '#666', label: status };
@@ -85,13 +94,26 @@ export default function HistoryScreen() {
         return val?.toLowerCase().includes(query);
       });
     }
-
     return data;
   }, [activities, activeTab, searchQuery, selectedStatus]);
 
   const renderItem = ({ item }) => {
     const status = getStatusStyle(item.status);
     const date = new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+    // --- IMPLEMENTASI LOGIC BARU ---
+    let displayImg = null;
+    if (activeTab === 'laporan') {
+      displayImg = resolveImageUrl(item.imageUrl);
+    } else if (activeTab === 'adopsi' && item.cat?.images) {
+      // Ambil string gambar pertama, lalu resolve
+      const firstImg = item.cat.images.split(',')[0];
+      displayImg = resolveImageUrl(firstImg);
+    } else if (activeTab === 'donasi' && item.campaign?.imageUrl) {
+      displayImg = resolveImageUrl(item.campaign.imageUrl);
+    }
+
+    const imageSource = displayImg ? { uri: displayImg } : { uri: 'https://via.placeholder.com/150' };
 
     return (
       <TouchableOpacity 
@@ -106,11 +128,9 @@ export default function HistoryScreen() {
             </View>
           ) : (
             <Image 
-              source={{ uri: activeTab === 'laporan' 
-                ? `${api.defaults.baseURL.replace('/api', '')}${item.imageUrl}` 
-                : item.cat?.imageUrl 
-              }} 
+              source={imageSource} 
               style={styles.cardImage} 
+              resizeMode="cover"
             />
           )}
 
@@ -124,13 +144,13 @@ export default function HistoryScreen() {
             
             <Text style={styles.cardTitle} numberOfLines={1}>
               {activeTab === 'laporan' ? item.conditionTags : 
-               activeTab === 'adopsi' ? `Adopsi ${item.cat?.name}` : 
+               activeTab === 'adopsi' ? `Adopsi ${item.cat?.name || 'Kucing'}` : 
                `Rp ${parseInt(item.amount).toLocaleString('id-ID')}`}
             </Text>
             
             <Text style={styles.cardSubtitle} numberOfLines={1}>
               {activeTab === 'laporan' ? item.address : 
-               activeTab === 'adopsi' ? `📍 ${item.address}` : 
+               activeTab === 'adopsi' ? `📍 ${item.cat?.shelter?.shelterAddress || 'Lokasi Shelter'}` : 
                `Campaign: ${item.campaign?.title}`}
             </Text>
           </View>
@@ -155,80 +175,39 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.topHeader}>
         <View style={styles.headerTitleRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={24} color="#333" />
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Feather name="arrow-left" size={24} color="#333" /></TouchableOpacity>
           <Text style={styles.headerTitle}>Riwayat Aktivitas</Text>
           <View style={{ width: 40 }} />
         </View>
-
         <View style={styles.searchBox}>
-          <Feather name="search" size={18} color="#999" />
-          <TextInput 
-            style={styles.searchInput}
-            placeholder={`Cari ${activeTab}...`}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+          <Feather name="search" size={18} color="#999" /><TextInput style={styles.searchInput} placeholder={`Cari ${activeTab}...`} value={searchQuery} onChangeText={setSearchQuery} />
         </View>
       </View>
 
       <View style={styles.tabBar}>
         {['laporan', 'adopsi', 'donasi'].map((tab) => (
-          <TouchableOpacity 
-            key={tab} 
-            style={[styles.tabItem, activeTab === tab && styles.activeTabItem]}
-            onPress={() => {
-              setActiveTab(tab);
-              setSelectedStatus('SEMUA');
-              setSearchQuery('');
-            }}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </Text>
+          <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => { setActiveTab(tab); setSelectedStatus('SEMUA'); setSearchQuery(''); }}>
+            <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {activeTab !== 'donasi' && (
         <View style={styles.filterContainer}>
-          <FlatList 
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={['SEMUA', 'PENDING', 'ON_PROCESS', 'RESCUED', 'REJECTED']}
-            keyExtractor={(i) => i}
-            renderItem={({item}) => (
-              <TouchableOpacity 
-                style={[styles.filterChip, selectedStatus === item && styles.activeChip]}
-                onPress={() => setSelectedStatus(item)}
-              >
-                <Text style={[styles.filterChipText, selectedStatus === item && styles.activeChipText]}>
-                  {item === 'SEMUA' ? 'Semua Status' : getStatusStyle(item).label}
-                </Text>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          />
+          <FlatList horizontal showsHorizontalScrollIndicator={false} data={['SEMUA', 'PENDING', 'ON_PROCESS', 'RESCUED', 'REJECTED']} keyExtractor={(i) => i} renderItem={({item}) => (
+            <TouchableOpacity style={[styles.filterChip, selectedStatus === item && styles.activeChip]} onPress={() => setSelectedStatus(item)}>
+              <Text style={[styles.filterChipText, selectedStatus === item && styles.activeChipText]}>{item === 'SEMUA' ? 'Semua Status' : getStatusStyle(item).label}</Text>
+            </TouchableOpacity>
+          )} contentContainerStyle={{ paddingHorizontal: 20 }} />
         </View>
       )}
 
       {loading ? (
         <ActivityIndicator size="large" color="#12464C" style={{ marginTop: 50 }} />
       ) : (
-        <FlatList
-          data={filteredData}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="clipboard-text-outline" size={60} color="#DDD" />
-              <Text style={styles.emptyText}>Tidak ditemukan riwayat {activeTab}</Text>
-            </View>
-          }
-        />
+        <FlatList data={filteredData} keyExtractor={(item) => item.id.toString()} renderItem={renderItem} contentContainerStyle={styles.listContainer} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} ListEmptyComponent={
+          <View style={styles.emptyContainer}><MaterialCommunityIcons name="clipboard-text-outline" size={60} color="#DDD" /><Text style={styles.emptyText}>Tidak ditemukan riwayat {activeTab}</Text></View>
+        } />
       )}
     </SafeAreaView>
   );
@@ -255,7 +234,7 @@ const styles = StyleSheet.create({
   listContainer: { padding: 20 },
   historyCard: { backgroundColor: '#FFF', borderRadius: 16, marginBottom: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   cardMain: { flexDirection: 'row', minHeight: 100 },
-  cardImage: { width: 100, height: 100 },
+  cardImage: { width: 100, height: 100, resizeMode: 'cover' },
   iconBox: { width: 100, height: 100, backgroundColor: '#E0F2F1', justifyContent: 'center', alignItems: 'center' },
   cardContent: { flex: 1, padding: 12, justifyContent: 'center' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },

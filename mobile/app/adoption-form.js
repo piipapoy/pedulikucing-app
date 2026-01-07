@@ -80,7 +80,6 @@ export default function AdoptionFormScreen() {
           if (member === 'Anak-anak') setChildren([]);
         } else {
           updated.push(member);
-          // FIX: Jika pilih Anak-anak, otomatis tambah 1 anak wajib
           if (member === 'Anak-anak' && children.length === 0) setChildren(['']); 
         }
       }
@@ -130,16 +129,77 @@ export default function AdoptionFormScreen() {
     setStep(step + 1);
   };
 
-  const handleFinalSubmit = async () => {
+const handleFinalSubmit = async () => {
+    // 1. Validasi Centang Semua Persetujuan
     const { dataTrue, readyInterview, updateRoutine, shelterRight } = formData.agreements;
     if (!dataTrue || !readyInterview || !updateRoutine || !shelterRight) {
       setErrorMessage('Anda wajib menyetujui seluruh poin persetujuan.');
-      setShowErrorModal(true); return;
+      setShowErrorModal(true);
+      return;
     }
 
     setLoading(true);
-    // API logic will go here
-    setTimeout(() => { setLoading(false); setShowSuccessModal(true); }, 2000);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      
+      // 2. Siapkan FormData (Multi-part)
+      const data = new FormData();
+      data.append('catId', String(catId));
+      data.append('catName', catName); // Digunakan backend untuk nama folder
+      
+      // Step 1: Data Diri
+      data.append('fullName', formData.name); 
+      data.append('phone', formData.phone);
+      data.append('ktpNumber', formData.ktpNumber);
+      data.append('socialMedia', formData.socialMedia || '');
+
+      // Step 2: Lingkungan
+      data.append('homeStatus', formData.homeStatus);
+      data.append('isPermitted', String(formData.isPermitted));
+      data.append('stayingWith', formData.stayingWith.join(', '));
+      data.append('childAges', children.join(', '));
+
+      // Step 3: Komitmen
+      data.append('hasExperience', String(formData.hasExperience));
+      data.append('reason', formData.reason);
+      data.append('job', formData.job);
+      data.append('movingPlan', formData.movingPlan);
+      data.append('isCommitted', String(formData.isCommitted));
+
+      // 3. Append File KTP
+      if (formData.documentKtp) {
+        data.append('documentKtp', {
+          uri: formData.documentKtp,
+          name: 'ktp.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      // 4. Append Multiple House Photos
+      formData.homePhotos.forEach((uri, index) => {
+        data.append('homePhotos', {
+          uri: uri,
+          name: `house${index + 1}.jpg`,
+          type: 'image/jpeg',
+        });
+      });
+
+      // 5. Kirim ke API
+      await api.post('/data/adopt', data, {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}` 
+        }
+      });
+
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Submit Adoption Error:', error.response?.data || error.message);
+      setErrorMessage(error.response?.data?.message || 'Gagal mengirim pengajuan. Coba lagi nanti.');
+      setShowErrorModal(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

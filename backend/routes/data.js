@@ -116,6 +116,32 @@ router.post('/adopt', authenticateToken, upload.fields([{ name: 'documentKtp', m
   }
 });
 
+// [FIX] GET: DAFTAR CAMPAIGN (LIST)
+router.get('/campaigns', async (req, res) => {
+  try {
+    const campaigns = await prisma.campaign.findMany({
+      where: { 
+        isApproved: true,   // Hanya tampilkan yang sudah diapprove admin
+        isClosed: false     // Jangan tampilkan yang sudah tutup
+      },
+      orderBy: { createdAt: 'asc' },
+      include: { 
+        shelter: { 
+          select: { 
+            name: true, 
+            nickname: true, // Untuk ditampilkan di card
+            isShelterVerified: true 
+          } 
+        } 
+      }
+    });
+    res.json(campaigns);
+  } catch (error) {
+    console.error("Error fetching campaigns:", error);
+    res.status(500).json({ error: 'Gagal ambil data campaign' });
+  }
+});
+
 // 4. GET: DETAIL CAMPAIGN BY ID (SPECIFIC)
 router.get('/campaigns/:id', async (req, res) => {
   try {

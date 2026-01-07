@@ -168,20 +168,34 @@ export default function CatDetail() {
             </View>
           </View>
 
-          <TouchableOpacity 
-            style={styles.shelterCard} 
-            activeOpacity={0.7}
-            onPress={() => console.log('Navigasi ke Shelter Profile')}
-          >
-            <View style={styles.shelterContent}>
-              <Image source={{ uri: 'https://ui-avatars.com/api/?name=' + cat.shelter.name }} style={styles.shelterImg} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shelterName}>{cat.shelter.name}</Text>
-                <Text style={styles.shelterSub}>Klik untuk lihat profil shelter</Text>
-              </View>
-              <Feather name="chevron-right" size={24} color={COLORS.secondary} />
-            </View>
-          </TouchableOpacity>
+<TouchableOpacity 
+  style={styles.shelterCard} 
+  activeOpacity={0.7}
+  onPress={() => {
+    // Navigasi ke halaman detail shelter dengan membawa ID shelter
+    router.push({ 
+      pathname: '/shelter-detail', 
+      params: { id: cat.shelterId } 
+    });
+  }}
+>
+  <View style={styles.shelterContent}>
+    {/* Menggunakan foto shelter jika ada, jika tidak pakai inisial avatar */}
+    <Image 
+      source={{ 
+        uri: cat.shelter.shelterPhotos 
+          ? cat.shelter.shelterPhotos.split(',')[0] // Ambil foto pertama
+          : 'https://ui-avatars.com/api/?name=' + cat.shelter.name 
+      }} 
+      style={styles.shelterImg} 
+    />
+    <View style={{ flex: 1 }}>
+      <Text style={styles.shelterName}>{cat.shelter.name}</Text>
+      <Text style={styles.shelterSub}>Klik untuk lihat profil shelter</Text>
+    </View>
+    <Feather name="chevron-right" size={24} color={COLORS.secondary} />
+  </View>
+</TouchableOpacity>
         </View>
       </ScrollView>
 

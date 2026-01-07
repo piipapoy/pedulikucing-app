@@ -4,6 +4,7 @@ import {
   Dimensions, ActivityIndicator, StatusBar, Share 
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import api from '../src/services/api';
 
@@ -250,7 +251,8 @@ export default function DonationDetail() {
           {activeTab === 'kabar' && (
             <View style={styles.newsContainer}>
               {campaign.updates && campaign.updates.length > 0 ? (
-                campaign.updates.map((news, i) => (
+                campaign.updates.slice() 
+                  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).map((news, i) => (
                   <View key={i} style={styles.newsItem}>
                     <View style={styles.newsLine} />
                     <View style={styles.newsDot} />

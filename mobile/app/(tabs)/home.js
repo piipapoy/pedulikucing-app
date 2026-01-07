@@ -117,10 +117,10 @@ export default function UserHomeScreen() {
 
         {/* --- 3. MENU --- */}
         <View style={styles.menuContainer}>
-          <MenuIcon icon="hospital-building" color="#455A64" label="Klinik" onPress={() => router.push('/shelter-gallery')} />
-          <MenuIcon icon="heart-multiple" color="#D81B60" label="Donasi" onPress={() => router.push('/donation-gallery')} />
-          <MenuIcon icon="book-open-page-variant" color="#2E7D32" label="Panduan" onPress={() => router.push('/guide')} />
-          <MenuIcon icon="history" color="#F57C00" label="Riwayat" onPress={() => router.push('/history')} />
+          <MenuIcon icon="storefront-outline" color="#455A64" label="Shelter" onPress={() => router.push('/shelter-gallery')} />
+          <MenuIcon icon="heart-outline" color="#D81B60" label="Donasi" onPress={() => router.push('/donation-gallery')} />
+          <MenuIcon icon="help-circle-outline" color="#2E7D32" label="Panduan" onPress={() => router.push('/guide')} />
+          <MenuIcon icon="calendar-outline" color="#F57C00" label="Riwayat" onPress={() => router.push('/history')} />
         </View>
 
         {/* --- 4. HERO --- */}
@@ -187,7 +187,13 @@ export default function UserHomeScreen() {
         <SectionHeader title="Campaign Donasi" onPress={() => router.push('/donation-gallery')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
             {campaigns.map((camp) => (
-                <TouchableOpacity key={camp.id} activeOpacity={0.9} style={styles.campaignCard}>
+                <TouchableOpacity 
+                  key={camp.id} 
+                  activeOpacity={0.9} 
+                  style={styles.campaignCard}
+                  // [FIX] Tambahkan navigasi ini agar bisa diklik
+                  onPress={() => router.push({ pathname: '/donation-detail', params: { id: camp.id } })}
+                >
                     <Image source={{ uri: camp.imageUrl }} style={styles.campaignImage} />
                     <View style={styles.campInfo}>
                         <Text style={styles.campaignTitle} numberOfLines={2}>{camp.title}</Text>

@@ -35,6 +35,17 @@ export default function UserHomeScreen() {
   const [filteredCats, setFilteredCats] = useState([]);
   const [filteredCampaigns, setFilteredCampaigns] = useState([]);
 
+  const resolveImageUrl = (rawPath) => {
+  if (!rawPath) return 'https://via.placeholder.com/400';
+  if (rawPath.startsWith('http')) return rawPath; // Jika sudah URL lengkap (seperti placeholder)
+  
+  // Ambil base URL dari konfigurasi api, hilangkan '/api' di ujungnya
+  const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+  const cleanPath = rawPath.trim().replace(/\\/g, '/');
+  
+  return `${baseUrl}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+};
+
   const fetchData = async () => {
     try {
       const userData = await AsyncStorage.getItem('userData');
@@ -214,7 +225,10 @@ export default function UserHomeScreen() {
                           style={styles.catCard}
                           onPress={() => router.push({ pathname: '/cat-detail', params: { id: cat.id } })}
                         >
-                            <Image source={{ uri: cat.images?.split(',')[0] }} style={styles.catImage} />
+                          <Image 
+      source={{ uri: resolveImageUrl(cat.images?.split(',')[0]) }} 
+      style={styles.catImage} 
+    />
                             <View style={[styles.genderBadge, { backgroundColor: cat.gender === 'Jantan' ? '#E3F2FD' : '#FCE4EC' }]}>
                                <MaterialCommunityIcons name={cat.gender === 'Jantan' ? 'gender-male' : 'gender-female'} size={12} color={cat.gender === 'Jantan' ? '#1976D2' : '#C2185B'} />
                             </View>
@@ -254,7 +268,10 @@ export default function UserHomeScreen() {
                           style={styles.campaignCard}
                           onPress={() => router.push({ pathname: '/donation-detail', params: { id: camp.id } })}
                         >
-                            <Image source={{ uri: camp.imageUrl }} style={styles.campaignImage} />
+                          <Image 
+      source={{ uri: resolveImageUrl(camp.imageUrl) }} 
+      style={styles.campaignImage} 
+    />
                             <View style={styles.campInfo}>
                                 <Text style={styles.campaignTitle} numberOfLines={2}>{camp.title}</Text>
                                 <View style={styles.progressBarBg}>

@@ -86,10 +86,6 @@ router.get('/messages/:roomId', authenticateToken, async (req, res) => {
 });
 
 // 5. GET CONTEXT (SINKRON LABEL)
-// --- UPDATE ENDPOINT CONTEXT DI CHAT.JS ---
-
-// --- UPDATE ENDPOINT CONTEXT DI CHAT.JS ---
-
 router.get('/context/:roomId', authenticateToken, async (req, res) => {
     const { roomId } = req.params;
     const myId = req.user.userId;
@@ -102,7 +98,6 @@ router.get('/context/:roomId', authenticateToken, async (req, res) => {
         const opponentId = room.userOneId === myId ? room.userTwoId : room.userOneId;
 
         // 1. Ambil Adopsi yang aktif
-        // FIX: Label tetap muncul saat PENDING, INTERVIEW, dan APPROVED
         const adoptions = await prisma.adoption.findMany({
             where: {
                 OR: [

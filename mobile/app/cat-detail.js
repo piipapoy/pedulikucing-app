@@ -28,7 +28,6 @@ export default function CatDetail() {
   const [checkingProfile, setCheckingProfile] = useState(false); 
   const [activeImage, setActiveImage] = useState(0);
   
-  // State untuk Custom Modal
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => { fetchCatDetail(); }, [id]);
@@ -42,6 +41,15 @@ export default function CatDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fungsi untuk mengubah path database menjadi URL lengkap yang valid
+  const resolveImageUrl = (rawPath) => {
+    if (!rawPath) return 'https://via.placeholder.com/400';
+    if (rawPath.startsWith('http')) return rawPath;
+    const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+    const cleanPath = rawPath.trim().replace(/\\/g, '/');
+    return `${baseUrl}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
   };
 
   const getCityFromAddress = (fullAddress) => {
@@ -59,16 +67,14 @@ export default function CatDetail() {
     return `${years} Thn ${months} Bln`;
   };
 
-  // --- LOGIC BARU: CEK PROFIL ---
   const handleAdopt = async () => {
     setCheckingProfile(true);
     try {
       const res = await api.get('/auth/profile');
       const user = res.data.user;
 
-      // Cek Nomor Telepon
       if (!user.phoneNumber || user.phoneNumber.trim() === '') {
-        setShowProfileModal(true); // Tampilkan Modal Custom
+        setShowProfileModal(true); 
       } else {
         router.push({
           pathname: '/adoption-form',
@@ -76,8 +82,6 @@ export default function CatDetail() {
         });
       }
     } catch (error) {
-      // Error fetch profile bisa tetap pakai alert kecil atau modal error lain, 
-      // tapi untuk sekarang kita fokus ke flow validasi nomor.
       console.log('Gagal cek profil');
     } finally {
       setCheckingProfile(false);
@@ -90,7 +94,8 @@ export default function CatDetail() {
 
   if (!cat) return null;
 
-  const images = cat.images?.split(',') || [];
+  // Split string gambar dari database menjadi array dan ubah ke URL lengkap
+  const images = cat.images ? cat.images.split(',').map(img => resolveImageUrl(img)) : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -106,6 +111,7 @@ export default function CatDetail() {
               const slide = Math.round(e.nativeEvent.contentOffset.x / width);
               setActiveImage(slide);
             }}
+            scrollEventThrottle={16}
           >
             {images.map((img, index) => (
               <Image key={index} source={{ uri: img }} style={styles.heroImage} />
@@ -127,15 +133,15 @@ export default function CatDetail() {
 
         <View style={styles.contentCard}>
           <View style={styles.mainInfo}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.catName}>{cat.name}</Text>
               <Text style={styles.catBreed}>{cat.breed}</Text>
             </View>
-            <View style={[styles.genderBadge, { backgroundColor: cat.gender === 'Jantan' ? '#E3F2FD' : '#FCE4EC' }]}>
+            <View style={[styles.genderBadge, { backgroundColor: cat.gender === 'MALE' ? '#E3F2FD' : '#FCE4EC' }]}>
               <MaterialCommunityIcons 
-                name={cat.gender === 'Jantan' ? 'gender-male' : 'gender-female'} 
+                name={cat.gender === 'MALE' ? 'gender-male' : 'gender-female'} 
                 size={22} 
-                color={cat.gender === 'Jantan' ? '#1976D2' : '#C2185B'} 
+                color={cat.gender === 'MALE' ? '#1976D2' : '#C2185B'} 
               />
             </View>
           </View>
@@ -154,48 +160,48 @@ export default function CatDetail() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Rekam Medis & Karakter</Text>
             <View style={styles.tagWrapper}>
-              {cat.health?.split(',').map((tag, i) => (
+              {/* Render Health Tags */}
+              {cat.health?.split(',').filter(t => t.trim() !== "").map((tag, i) => (
                 <View key={`h-${i}`} style={styles.healthTag}>
                   <Ionicons name="checkmark-done" size={14} color={COLORS.secondary} />
-                  <Text style={styles.healthTagText}>{tag}</Text>
+                  <Text style={styles.healthTagText}>{tag.trim()}</Text>
                 </View>
               ))}
-              {cat.personality?.split(',').map((tag, i) => (
+              {/* Render Personality Tags */}
+              {cat.personality?.split(',').filter(t => t.trim() !== "").map((tag, i) => (
                 <View key={`p-${i}`} style={styles.personalityTag}>
-                  <Text style={styles.personalityTagText}>{tag}</Text>
+                  <Text style={styles.personalityTagText}>{tag.trim()}</Text>
                 </View>
               ))}
             </View>
           </View>
 
-<TouchableOpacity 
-  style={styles.shelterCard} 
-  activeOpacity={0.7}
-  onPress={() => {
-    // Navigasi ke halaman detail shelter dengan membawa ID shelter
-    router.push({ 
-      pathname: '/shelter-detail', 
-      params: { id: cat.shelterId } 
-    });
-  }}
->
-  <View style={styles.shelterContent}>
-    {/* Menggunakan foto shelter jika ada, jika tidak pakai inisial avatar */}
+          <TouchableOpacity 
+            style={styles.shelterCard} 
+            activeOpacity={0.7}
+            onPress={() => {
+              router.push({ 
+                pathname: '/shelter-detail', 
+                params: { id: cat.shelterId } 
+              });
+            }}
+          >
+<View style={styles.shelterContent}>
     <Image 
-      source={{ 
-        uri: cat.shelter.shelterPhotos 
-          ? cat.shelter.shelterPhotos.split(',')[0] // Ambil foto pertama
-          : 'https://ui-avatars.com/api/?name=' + cat.shelter.name 
+      source={{
+        uri: cat.shelter?.photoProfile 
+          ? resolveImageUrl(cat.shelter.photoProfile)
+          : resolveImageUrl(cat.shelter?.shelterPhotos?.split(',')[0])
       }} 
       style={styles.shelterImg} 
     />
     <View style={{ flex: 1 }}>
-      <Text style={styles.shelterName}>{cat.shelter.name}</Text>
+      <Text style={styles.shelterName}>{cat.shelter?.nickname || cat.shelter?.name}</Text>
       <Text style={styles.shelterSub}>Klik untuk lihat profil shelter</Text>
     </View>
     <Feather name="chevron-right" size={24} color={COLORS.secondary} />
   </View>
-</TouchableOpacity>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -214,7 +220,7 @@ export default function CatDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* --- CUSTOM MODAL: PROFIL INCOMPLETE --- */}
+      {/* MODAL PROFIL INCOMPLETE */}
       <Modal animationType="fade" transparent visible={showProfileModal} statusBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -224,7 +230,7 @@ export default function CatDetail() {
               </View>
               <Text style={styles.modalTitle}>Lengkapi Profil</Text>
               <Text style={styles.modalDesc}>
-                Shelter memerlukan nomor WhatsApp/Telepon aktif agar bisa menghubungi Anda untuk proses selanjutnya.
+                Shelter memerlukan nomor WhatsApp aktif agar bisa menghubungi Anda untuk proses selanjutnya.
               </Text>
               
               <View style={styles.modalActions}>
@@ -296,8 +302,6 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 25, paddingVertical: 20, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: COLORS.divider },
   adoptBtn: { height: 60, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   adoptBtnText: { fontSize: 17, fontWeight: '900', color: '#FFF' },
-  
-  // MODAL STYLES (MATCHING UI REGISTER SHELTER)
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalContainer: { width: '85%' },
   modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center', width: '100%', elevation: 5 },

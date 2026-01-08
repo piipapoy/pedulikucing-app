@@ -124,7 +124,14 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
     const { password: _, ...userWithoutPassword } = user;
-    res.json({ message: 'Login berhasil', token, user: userWithoutPassword });
+    
+    // 🔥 FIX: Tambahin userId di response
+    res.json({ 
+      message: 'Login berhasil', 
+      token, 
+      userId: user.id, // ← INI YANG PENTING!
+      user: userWithoutPassword 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -236,57 +243,99 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // 7. GET ALL ACTIVITIES
+// 7. GET ALL ACTIVITIES (SHELTER & USER)
 router.get('/activities', authenticateToken, async (req, res) => {
   const userId = req.user.userId;
+  const userRole = req.user.role;
+
   try {
-    const reports = await prisma.report.findMany({
-      where: { userId: userId },
-      orderBy: { createdAt: 'desc' }
-    });
+    // --- LOGIC KHUSUS ROLE SHELTER ---
+    if (userRole === 'SHELTER') {
+  const [myCats, myHandledReports, globalPendingReports, incomingAdoptions, incomingDonations] = await Promise.all([
+    // 1. Kucing milik shelter ini
+    prisma.cat.findMany({ where: { shelterId: userId } }),
+    
+    // 2. Laporan yang SEDANG diurus oleh shelter ini
+    prisma.report.findMany({ where: { rescuerId: userId } }),
 
-const adoptions = await prisma.adoption.findMany({
-  where: { userId: userId },
-  include: { 
-    cat: {
-      include: {
-        shelter: { 
-          select: { 
-            id: true,
-            name: true, 
-            nickname: true,
-            shelterAddress: true, 
-            shelterPhotos: true // <--- WAJIB ADA AGAR FOTO MUNCUL
-          } 
-        }
-      } 
-    } 
-  },
-  orderBy: { createdAt: 'desc' }
-});
+    // 3. BARU: Total Laporan PENDING di seluruh sistem (Laporan Masuk)
+    prisma.report.count({ where: { status: 'PENDING' } }),
+    
+    // 4. Pengajuan adopsi masuk
+    prisma.adoption.findMany({
+      where: { cat: { shelterId: userId } },
+      include: { user: { select: { name: true } }, cat: true }
+    }),
+    
+    // 5. Donasi masuk
+    prisma.donation.findMany({
+      where: { campaign: { shelterId: userId } }
+    })
+  ]);
 
-    const donations = await prisma.donation.findMany({
-      where: { userId: userId },
-      include: { 
-        campaign: {
+  return res.json({ 
+    isShelter: true,
+    cats: myCats, 
+    handledReports: myHandledReports, 
+    globalPendingCount: globalPendingReports, // Kirim angka laporan masuk
+    adoptions: incomingAdoptions, 
+    donations: incomingDonations 
+  });
+}
+
+    // --- LOGIC ROLE USER BIASA ---
+    const [userReports, userAdoptions, userDonations] = await Promise.all([
+      prisma.report.findMany({
+        where: { userId: userId },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.adoption.findMany({
+        where: { userId: userId },
+        include: { 
+          cat: {
             include: {
-            shelter: {
+              shelter: { 
+                select: { 
+                  id: true, name: true, nickname: true,
+                  shelterAddress: true, shelterPhotos: true 
+                } 
+              }
+            } 
+          } 
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.donation.findMany({
+        where: { userId: userId },
+        include: { 
+          campaign: {
+            include: {
+              shelter: {
                 select: {
-                id: true,
-                name: true,
-                nickname: true,
-                shelterAddress: true,
-                shelterPhotos: true
+                  id: true, name: true, nickname: true,
+                  shelterAddress: true, shelterPhotos: true
                 }
+              }
             }
-            }
-        }
-    },
-      orderBy: { createdAt: 'desc' }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    res.json({ 
+      reports: userReports, 
+      adoptions: userAdoptions, 
+      donations: userDonations 
     });
 
-    res.json({ reports, adoptions, donations });
   } catch (error) {
-    res.status(500).json({ message: 'Gagal mengambil riwayat aktivitas' });
+    // Sangat penting untuk log error di terminal backend
+    console.error("ACTIVITIES_ERROR:", error); 
+    res.status(500).json({ 
+      message: 'Gagal mengambil riwayat aktivitas',
+      error: error.message 
+    });
   }
 });
 

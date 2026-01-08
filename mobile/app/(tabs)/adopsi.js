@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import api from '../../src/services/api'; // Path disesuaikan karena pindah ke subfolder (tabs)
+import api from '../../src/services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -59,6 +59,14 @@ export default function AdoptionGalleryScreen() {
     }
   };
 
+  const resolveImageUrl = (rawPath) => {
+    if (!rawPath) return 'https://via.placeholder.com/150';
+    if (rawPath.startsWith('http')) return rawPath;
+    const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+    const cleanPath = rawPath.split(',')[0].trim().replace(/\\/g, '/');
+    return `${baseUrl}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+  };
+
   const getCityFromAddress = (fullAddress) => {
     if (!fullAddress) return 'Indonesia';
     const parts = fullAddress.split(',');
@@ -77,7 +85,10 @@ export default function AdoptionGalleryScreen() {
     const matchSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                         cat.breed.toLowerCase().includes(searchQuery.toLowerCase());
     const matchBreed = filter.breed === 'Semua' || cat.breed === filter.breed;
-    const matchGender = filter.gender === 'Semua' || cat.gender === filter.gender;
+    
+    const genderDB = cat.gender === 'MALE' ? 'Jantan' : 'Betina';
+    const matchGender = filter.gender === 'Semua' || genderDB === filter.gender;
+
     const matchPerso = filter.personalities.length === 0 || 
                       filter.personalities.every(p => cat.personality?.includes(p));
     const matchHealth = filter.healths.length === 0 || 
@@ -113,7 +124,6 @@ export default function AdoptionGalleryScreen() {
       
       <View style={styles.fixedTopSection}>
         <View style={styles.header}>
-          {/* HEADER TANPA TOMBOL BACK KARENA INI TAB UTAMA */}
           <Text style={styles.headerTitle}>Adopsi Kucing</Text>
           <TouchableOpacity 
               style={[styles.iconBtn, (filter.breed !== 'Semua' || filter.personalities.length > 0) && {backgroundColor: COLORS.primary}]} 
@@ -148,7 +158,7 @@ export default function AdoptionGalleryScreen() {
           <View style={styles.row}>
             {currentCats.map((cat) => (
               <TouchableOpacity key={cat.id} style={styles.card} onPress={() => router.push({ pathname: '/cat-detail', params: { id: cat.id } })}>
-                <Image source={{ uri: cat.images?.split(',')[0] }} style={styles.cardImg} />
+                <Image source={{ uri: resolveImageUrl(cat.images) }} style={styles.cardImg} />
                 
                 <View style={styles.cardInfo}>
                   <Text style={styles.catName} numberOfLines={1}>{cat.name}</Text>
@@ -170,20 +180,15 @@ export default function AdoptionGalleryScreen() {
                   </View>
                 </View>
 
-                <View style={[styles.miniGender, { backgroundColor: cat.gender === 'Jantan' ? '#E3F2FD' : '#FCE4EC' }]}>
-                  <MaterialCommunityIcons name={cat.gender === 'Jantan' ? 'gender-male' : 'gender-female'} size={12} color={cat.gender === 'Jantan' ? '#1976D2' : '#C2185B'} />
+                <View style={[styles.miniGender, { backgroundColor: cat.gender === 'MALE' ? '#E3F2FD' : '#FCE4EC' }]}>
+                  <MaterialCommunityIcons name={cat.gender === 'MALE' ? 'gender-male' : 'gender-female'} size={12} color={cat.gender === 'MALE' ? '#1976D2' : '#C2185B'} />
                 </View>
               </TouchableOpacity>
             ))}
           </View>
-
-          {/* Pagination & Empty State tetap sama */}
-          {/* ... */}
         </ScrollView>
       )}
 
-      {/* MODAL FILTER tetap sama */}
-      {/* ... */}
       <Modal animationType="slide" transparent={true} visible={showFilterModal} statusBarTranslucent={true} onRequestClose={() => setShowFilterModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -209,7 +214,6 @@ export default function AdoptionGalleryScreen() {
   );
 }
 
-// Komponen FilterSection dan Styles tetap sama dengan galeri kamu
 const FilterSection = ({ label, options, selected, onSelect, isMulti }) => (
     <View style={styles.sectionContainer}>
       <Text style={styles.filterLabel}>{label}</Text>

@@ -44,6 +44,13 @@ export default function ShelterGallery() {
   // List Layanan untuk Filter
   const serviceOptions = ['Vaksin', 'Steril', 'Rawat Inap', 'UGD 24 Jam', 'Grooming', 'USG', 'Operasi', 'Adopsi'];
 
+  const resolveProfileUrl = (path, name) => {
+    if (!path) return `https://ui-avatars.com/api/?name=${name}&background=1A3C40&color=fff`;
+    if (path.startsWith('http')) return path;
+    const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+    return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path.replace(/\\/g, '/')}`;
+  };
+
   useEffect(() => { fetchShelters(); }, []);
 
   const fetchShelters = async () => {
@@ -151,7 +158,7 @@ export default function ShelterGallery() {
             </View>
           ) : (
             filteredShelters.map((item) => {
-              const imgUri = item.shelterPhotos?.split(',')[0] || 'https://via.placeholder.com/400';
+              const imgUri = resolveProfileUrl(item.photoProfile || item.shelterPhotos?.split(',')[0], item.nickname);
               const isOpen = isOpenNow(item.clinicOpenHours);
               // Ambil 3 layanan pertama buat ditampilin di card
               const displayServices = item.services ? item.services.split(',').slice(0, 3) : [];

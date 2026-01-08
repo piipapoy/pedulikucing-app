@@ -114,12 +114,12 @@ const VideoSection = ({ videoUrl, styles }) => {
       }}
     >
       <Image 
-        source={{ 
-          uri: item.cat?.shelter?.shelterPhotos 
-            ? resolveImageUrl(item.cat.shelter.shelterPhotos.split(',')[0]) 
-            : `https://ui-avatars.com/api/?name=${item.cat?.shelter?.name || 'S'}&background=1A3C40&color=fff`
+        source={{
+          uri: item.cat?.shelter?.photoProfile 
+            ? resolveImageUrl(item.cat.shelter.photoProfile) 
+            : resolveImageUrl(item.cat?.shelter?.shelterPhotos?.split(',')[0])
         }} 
-        style={styles.shelterImgSmall} 
+    style={styles.shelterImgSmall}
       />
       <View style={{ flex: 1, marginLeft: 15 }}>
         <Text style={styles.shelterNameText}>{item.cat?.shelter?.name || 'Shelter Peduli'}</Text>

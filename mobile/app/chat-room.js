@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TextInput, 
-  TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, ScrollView
+  TouchableOpacity, Image, KeyboardAvoidingView, 
+  Platform, ActivityIndicator, Alert 
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +10,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import api from '../src/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function ChatRoomScreen() {
+export default function ChatRoom() {
   const { roomId, name, avatar } = useLocalSearchParams();
   const router = useRouter();
   const flatListRef = useRef();
@@ -18,190 +19,153 @@ export default function ChatRoomScreen() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState(null);
-  const [activeTasks, setActiveTasks] = useState([]); // State untuk nampung urusan aktif
+  const [contexts, setContexts] = useState([]);
+  const [showContext, setShowContext] = useState(false); // 🔥 Toggle Dropdown
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(fetchMessages, 3000);
+    const init = async () => {
+      const storedId = await AsyncStorage.getItem('userId');
+      if (storedId) setMyId(Number(storedId));
+      await Promise.all([fetchMessages(), fetchChatContext()]);
+      setLoading(false);
+    };
+    init();
+    const interval = setInterval(fetchMessages, 3000); 
     return () => clearInterval(interval);
   }, []);
-
-  const loadData = async () => {
-    try {
-      const userStr = await AsyncStorage.getItem('userData');
-      const token = await AsyncStorage.getItem('userToken');
-      const parsedUser = JSON.parse(userStr);
-      setMyId(parsedUser.id);
-
-      // Ambil urusan aktif (Adopsi & Laporan) antara saya dan lawan bicara
-      // Endpoint ini akan mengembalikan semua urusan yang melibatkan kedua user di room ini
-      const resContext = await api.get(`/chat/context/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setActiveTasks(resContext.data);
-
-      await fetchMessages();
-    } catch (e) {
-      console.log("Load Data Error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchMessages = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const res = await api.get(`/chat/messages/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/chat/messages/${roomId}`, { headers: { Authorization: `Bearer ${token}` } });
       setMessages(res.data);
-    } catch (e) { 
-      console.log("Fetch Messages Error:", e); 
-    }
+    } catch (e) { console.log("Msg Error"); }
+  };
+
+  const fetchChatContext = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const res = await api.get(`/chat/context/${roomId}`, { headers: { Authorization: `Bearer ${token}` } });
+      setContexts(res.data || []);
+    } catch (e) { console.log("Ctx Error"); }
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (inputText.trim() === '') return;
     const content = inputText;
     setInputText('');
-
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const res = await api.post('/chat/message', 
-        { roomId, content },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessages(prev => [...prev, { ...res.data, senderId: myId }]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    } catch (e) { 
-      console.log("Send Message Error:", e); 
-    }
+      const res = await api.post('/chat/message', { roomId, content }, { headers: { Authorization: `Bearer ${token}` } });
+      setMessages(prev => [...prev, res.data]);
+    } catch (e) { Alert.alert("Error", "Gagal kirim"); }
   };
 
-  const renderBubble = ({ item }) => {
-    const isMine = item.senderId === myId;
+  const handleUpdateStatus = (item) => {
+    const finalStatus = item.type === 'adoption' ? 'APPROVED' : 'RESCUED';
+    Alert.alert("Selesaikan?", `Urusan "${item.title}" sudah selesai?`, [
+      { text: "Batal", style: "cancel" },
+      { text: "Ya", onPress: async () => {
+          try {
+            const token = await AsyncStorage.getItem('userToken');
+            await api.patch('/chat/context/update-status', { id: item.id, type: item.type, newStatus: finalStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            fetchChatContext();
+          } catch (e) { Alert.alert("Error", "Gagal"); }
+      }}
+    ]);
+  };
+
+  const renderMessage = ({ item }) => {
+    if (!myId) return null;
+    const isMe = Number(item.senderId) === Number(myId);
     return (
-      <View style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}>
-        <Text style={[styles.msgText, isMine ? styles.myMsgText : styles.theirMsgText]}>
-          {item.content}
-        </Text>
-        <Text style={styles.timeText}>
-          {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+      <View style={[styles.msgWrapper, isMe ? styles.myMsgWrapper : styles.theirMsgWrapper]}>
+        <View style={[styles.msgBubble, isMe ? styles.myBubble : styles.theirBubble]}>
+          <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.theirMsgText]}>{item.content}</Text>
+          <View style={styles.msgFooter}>
+            <Text style={[styles.msgTime, isMe ? styles.myTimeText : styles.theirTimeText]}>
+                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isMe && <Ionicons name={item.isRead ? "checkmark-done" : "checkmark"} size={14} color={item.isRead ? "#4FC3F7" : "rgba(255,255,255,0.5)"} style={{marginLeft: 4}} />}
+          </View>
+        </View>
       </View>
     );
   };
 
-  // --- RENDER AREA URUSAN AKTIF (Context Switcher) ---
-const renderContextArea = () => {
-  // Hanya tampilkan jika status bukan PENDING (untuk laporan)
-  const filteredTasks = activeTasks.filter(task => {
-    if (task.type === 'adoption') return true;
-    return task.status !== 'PENDING';
-  });
+  const resolveImageUrl = (rawPath) => {
+    if (!rawPath) return 'https://ui-avatars.com/api/?name=' + name;
+    if (rawPath.startsWith('http')) return rawPath;
+    const baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+    return `${baseUrl}${rawPath.replace(/\\/g, '/')}`;
+  };
 
-  if (filteredTasks.length === 0) return null;
-
-  return (
-    <View style={styles.contextManager}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 15}}>
-        {filteredTasks.map((task, idx) => (
-          <TouchableOpacity 
-            key={idx} 
-            style={[styles.taskCard, task.type === 'report' ? styles.taskLapor : styles.taskAdopsi]}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.taskIconCircle, { backgroundColor: task.type === 'report' ? '#C2185B' : '#12464C' }]}>
-              <Ionicons name={task.type === 'report' ? "alert-circle" : "paw"} size={14} color="#FFF" />
-            </View>
-            <View>
-              {/* PERBAIKAN: Gunakan label yang dinamis sesuai type */}
-              <Text style={styles.taskLabelSmall}>
-                {task.type === 'report' ? 'Laporan Darurat' : 'Adopsi Kucing'}
-              </Text>
-              <Text style={styles.taskTitle} numberOfLines={1}>
-                {task.title}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-};
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
-        <ActivityIndicator size="large" color="#12464C" />
-      </View>
-    );
-  }
+  if (loading || !myId) return <View style={styles.center}><ActivityIndicator size="large" color="#12464C" /></View>;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Feather name="chevron-left" size={28} color="#12464C" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerCenterRow}>
-          <Image 
-            source={{ 
-              uri: avatar 
-                ? `http://localhost:5000${avatar}` 
-                : `https://ui-avatars.com/api/?name=${name}&backgroundColor=12464C&color=fff` 
-            }} 
-            style={styles.headerAvatar} 
-          />
-          <View style={{ marginLeft: 10 }}>
-            <Text style={styles.headerTitleText}>{name}</Text>
-            <Text style={styles.onlineStatus}>Online</Text>
-          </View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Feather name="chevron-left" size={28} color="#333" /></TouchableOpacity>
+        <Image source={{ uri: resolveImageUrl(avatar) }} style={styles.avatar} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerName}>{name}</Text>
+            <Text style={styles.onlineStatus}>Terhubung</Text>
         </View>
         
-        <TouchableOpacity>
-          <Feather name="more-vertical" size={22} color="#12464C" />
-        </TouchableOpacity>
+        {/* 🔥 Tombol Dropdown Info Urusan */}
+        {contexts.length > 0 && (
+            <TouchableOpacity 
+                style={[styles.contextToggle, showContext && styles.contextToggleActive]} 
+                onPress={() => setShowContext(!showContext)}
+            >
+                <MaterialCommunityIcons name="briefcase-outline" size={20} color={showContext ? "#FFF" : "#12464C"} />
+                {contexts.length > 0 && <View style={styles.badgeCount}><Text style={styles.badgeText}>{contexts.length}</Text></View>}
+            </TouchableOpacity>
+        )}
       </View>
 
-      {/* RENDER CONTEXT MANAGER */}
-      {renderContextArea()}
+      {/* 🔥 Area Dropdown Context */}
+      {showContext && contexts.length > 0 && (
+          <View style={styles.dropdownContainer}>
+              {contexts.map((item, index) => (
+                  <View key={`ctx-${index}`} style={styles.contextItem}>
+                      <View style={styles.contextInfo}>
+                        <MaterialCommunityIcons name={item.type === 'adoption' ? "paw" : "alert-decagram"} size={16} color="#12464C" />
+                        <View style={{marginLeft: 8, flex: 1}}>
+                            <Text style={styles.contextTitle} numberOfLines={1}>{item.title}</Text>
+                            <Text style={styles.contextSub}>Status: {item.status}</Text>
+                        </View>
+                      </View>
+                      {/* MODIFIKASI: Tombol selesaikan hanya untuk report, adopsi hanya indikator status */}
+                      {item.type === 'report' && item.canManage ? (
+                        <TouchableOpacity style={styles.doneBtn} onPress={() => handleUpdateStatus(item)}>
+                            <Text style={styles.doneBtnText}>Selesaikan</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.statusBadgeSmall}>
+                            <Text style={styles.statusBadgeTextSmall}>{item.status}</Text>
+                        </View>
+                      )}
+                  </View>
+              ))}
+          </View>
+      )}
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderBubble}
-          contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        />
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        extraData={myId}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderMessage}
+        contentContainerStyle={styles.listContent}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+      />
 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <Feather name="plus" size={22} color="#12464C" />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            placeholder="Ketik pesan..."
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-          />
-          <TouchableOpacity 
-            style={[styles.sendBtn, !inputText.trim() && { backgroundColor: '#CCC' }]} 
-            onPress={sendMessage}
-            disabled={!inputText.trim()}
-          >
-            <Ionicons name="send" size={18} color="#FFF" />
-          </TouchableOpacity>
+          <TextInput style={styles.input} placeholder="Tulis pesan..." value={inputText} onChangeText={setInputText} multiline />
+          <TouchableOpacity style={styles.sendBtn} onPress={sendMessage} disabled={!inputText.trim()}><Ionicons name="send" size={20} color="#FFF" /></TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -209,120 +173,43 @@ const renderContextArea = () => {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7F8' },
-  header: { 
-    height: 65, 
-    backgroundColor: '#FFF', 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 15,
-    borderBottomWidth: 1, 
-    borderBottomColor: '#EEE',
-    elevation: 2
-  },
-  headerCenterRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center',
-    flex: 1,
-    marginLeft: 10
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EEE'
-  },
-  headerTitleText: { fontSize: 16, fontWeight: 'bold', color: '#12464C' },
-  onlineStatus: { fontSize: 11, color: '#4CAF50', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#F0F2F5' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#EEE', elevation: 2, zIndex: 10 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EEE' },
+  headerName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  onlineStatus: { fontSize: 11, color: '#4CAF50' },
   
-  // STYLING CONTEXT MANAGER (Drop down replacement)
-  contextManager: {
-    backgroundColor: '#FFF',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 15,
-    marginRight: 12,
-    minWidth: 160,
-    borderWidth: 1,
-  },
-  taskAdopsi: { backgroundColor: '#F0F7F7', borderColor: '#B2DFDB' },
-  taskLapor: { backgroundColor: '#FFF5F5', borderColor: '#FFCDD2' },
-  taskIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10
-  },
-  taskTitle: { fontSize: 12, fontWeight: 'bold', color: '#333', maxWidth: 110 },
-  taskStatus: { fontSize: 10, color: '#666', marginTop: 1 },
+  // DROPDOWN STYLES
+  contextToggle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center' },
+  contextToggleActive: { backgroundColor: '#12464C' },
+  badgeCount: { position: 'absolute', top: -2, right: -2, backgroundColor: '#C2185B', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  badgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  dropdownContainer: { position: 'absolute', top: 70, left: 15, right: 15, backgroundColor: '#FFF', borderRadius: 15, padding: 10, elevation: 5, zIndex: 100, borderWidth: 1, borderColor: '#EEE' },
+  contextItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  contextInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  contextTitle: { fontSize: 13, fontWeight: 'bold', color: '#333' },
+  contextSub: { fontSize: 10, color: '#888' },
+  doneBtn: { backgroundColor: '#12464C', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  doneBtnText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  statusBadgeSmall: { backgroundColor: '#E0F2F1', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  statusBadgeTextSmall: { fontSize: 10, color: '#12464C', fontWeight: '800' },
 
-  bubble: { 
-    maxWidth: '80%', 
-    padding: 12, 
-    borderRadius: 18, 
-    marginBottom: 12,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2
-  },
-  myBubble: { 
-    alignSelf: 'flex-end', 
-    backgroundColor: '#12464C', 
-    borderBottomRightRadius: 2 
-  },
-  theirBubble: { 
-    alignSelf: 'flex-start', 
-    backgroundColor: '#FFF', 
-    borderBottomLeftRadius: 2 
-  },
-  msgText: { fontSize: 15, lineHeight: 22 },
+  listContent: { padding: 15 },
+  msgWrapper: { marginBottom: 10, flexDirection: 'row', width: '100%' },
+  myMsgWrapper: { justifyContent: 'flex-end' },
+  theirMsgWrapper: { justifyContent: 'flex-start' },
+  msgBubble: { maxWidth: '80%', padding: 10, borderRadius: 15, elevation: 1 },
+  myBubble: { backgroundColor: '#12464C', borderBottomRightRadius: 2 },
+  theirBubble: { backgroundColor: '#FFF', borderBottomLeftRadius: 2 },
+  msgText: { fontSize: 15 },
   myMsgText: { color: '#FFF' },
   theirMsgText: { color: '#333' },
-  timeText: { fontSize: 9, color: '#999', marginTop: 4, alignSelf: 'flex-end' },
-  
-  inputContainer: { 
-    flexDirection: 'row', 
-    padding: 12, 
-    backgroundColor: '#FFF', 
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE'
-  },
-  attachBtn: { marginRight: 10 },
-  input: { 
-    flex: 1, 
-    backgroundColor: '#F0F2F5', 
-    borderRadius: 22, 
-    paddingHorizontal: 15, 
-    paddingVertical: 8, 
-    maxHeight: 100, 
-    fontSize: 15,
-    color: '#333'
-  },
-  sendBtn: { 
-    width: 42, 
-    height: 42, 
-    borderRadius: 21, 
-    backgroundColor: '#12464C', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginLeft: 10 
-  },
-  taskLabelSmall: {
-    fontSize: 9,
-    color: '#666',
-    textTransform: 'uppercase',
-    fontWeight: 'bold'
-  }
+  msgFooter: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 2 },
+  msgTime: { fontSize: 9 },
+  myTimeText: { color: 'rgba(255,255,255,0.7)' },
+  theirTimeText: { color: '#999' },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#EEE' },
+  input: { flex: 1, backgroundColor: '#F0F2F5', borderRadius: 24, paddingHorizontal: 15, paddingVertical: 10, marginHorizontal: 8 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#12464C', justifyContent: 'center', alignItems: 'center' }
 });

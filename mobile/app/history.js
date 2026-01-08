@@ -10,7 +10,6 @@ import api from '../src/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams } from 'expo-router';
 
-// --- HELPER OUTSIDE COMPONENT ---
 const formatRupiah = (num) => {
   if (!num) return 'Rp 0';
   return 'Rp ' + parseInt(num).toLocaleString('id-ID');
@@ -53,81 +52,42 @@ export default function HistoryScreen() {
   useEffect(() => { fetchActivities(); }, []);
   const onRefresh = () => { setRefreshing(true); fetchActivities(); };
 
-  useEffect(() => {
-    if (params.initialTab) {
-      setActiveTab(params.initialTab);
-    }
-  }, [params.initialTab]);
-
-// Tambahkan di dalam komponen HistoryScreen:
-
-const handleContact = async (item, type) => {
-  try {
-    const token = await AsyncStorage.getItem('userToken');
-    let payload = {};
-    let recipientName = "";
-
-    if (type === 'laporan') {
-      // Cukup kirim reportId, biarkan backend cari Admin-nya
-      payload = { reportId: item.id }; 
-      recipientName = "Admin Rescue";
-    } else {
-      if (!item.cat?.shelterId) {
-        Alert.alert("Error", "Data shelter tidak ditemukan.");
-        return;
-      }
-      payload = { 
-        userTwoId: item.cat.shelterId, 
-        adoptionId: item.id 
-      };
-      recipientName = item.cat.shelter?.name || "Shelter";
-    }
-
-    const res = await api.post('/chat/room/init', payload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    router.push({
-      pathname: '/chat-room',
-      params: { roomId: res.data.id, name: recipientName }
-    });
-
-  } catch (error) {
-    // Cek log terminal backend buat liat error detailnya kalau masih 500
-    console.log("Error Init Chat:", error.response?.data);
-    Alert.alert("Error", error.response?.data?.message || "Gagal memulai chat.");
-  }
-};
-
-  const navigateToDetail = (item, type) => {
-    router.push({
-      pathname: '/history-detail',
-      params: { data: JSON.stringify(item), type: type }
-    });
-  };
-
-  const handleDonateAgain = () => {
-    router.push('/donation-gallery');
-  };
-
+  // FIX: Status Style sinkron dengan Enum database
   const getStatusStyle = (status) => {
     switch (status) {
+      // Common
       case 'PENDING': return { bg: '#FFF3E0', text: '#EF6C00', label: 'Menunggu' };
+      case 'REJECTED': return { bg: '#FFEBEE', text: '#D32F2F', label: 'Ditolak' };
+      
+      // Laporan Only
+      case 'VERIFIED': return { bg: '#E1F5FE', text: '#0288D1', label: 'Terverifikasi' };
       case 'ON_PROCESS': return { bg: '#E3F2FD', text: '#1976D2', label: 'Diproses' };
       case 'RESCUED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Selesai' };
+      
+      // Adopsi Only
+      case 'INTERVIEW': return { bg: '#F3E5F5', text: '#7B1FA2', label: 'Wawancara' };
       case 'APPROVED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Disetujui' };
-      case 'REJECTED': return { bg: '#FFEBEE', text: '#D32F2F', label: 'Ditolak' };
-      case 'SUCCESS': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
       case 'COMPLETED': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
+      case 'CANCELLED': return { bg: '#F5F5F5', text: '#616161', label: 'Dibatalkan' };
+      
+      // Donasi
+      case 'SUCCESS': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Berhasil' };
       default: return { bg: '#F5F5F5', text: '#666', label: status };
     }
   };
 
+  // FIX: Daftar filter dinamis berdasarkan Tab
+  const statusFilters = useMemo(() => {
+    if (activeTab === 'laporan') return ['SEMUA', 'PENDING', 'VERIFIED', 'ON_PROCESS', 'RESCUED', 'REJECTED'];
+    if (activeTab === 'adopsi') return ['SEMUA', 'PENDING', 'INTERVIEW', 'APPROVED', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+    return ['SEMUA'];
+  }, [activeTab]);
+
   const filteredData = useMemo(() => {
     let data = [];
-    if (activeTab === 'laporan') data = activities.reports;
-    else if (activeTab === 'adopsi') data = activities.adoptions;
-    else data = activities.donations;
+    if (activeTab === 'laporan') data = activities.reports || [];
+    else if (activeTab === 'adopsi') data = activities.adoptions || [];
+    else data = activities.donations || [];
 
     if (selectedStatus !== 'SEMUA') {
       data = data.filter(item => item.status === selectedStatus);
@@ -145,138 +105,148 @@ const handleContact = async (item, type) => {
     return data;
   }, [activities, activeTab, searchQuery, selectedStatus]);
 
-const renderItem = ({ item }) => {
-  const status = getStatusStyle(item.status);
-  const date = new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+  const handleContact = async (item, type) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      let payload = {};
+      let recipientName = "";
 
-  let displayImg = null;
-  if (activeTab === 'laporan') {
-    const firstImg = item.imageUrl?.split(',')[0]?.trim(); 
-    displayImg = resolveImageUrl(firstImg);
-  } else if (activeTab === 'adopsi' && item.cat?.images) {
-    const firstImg = item.cat.images.split(',')[0];
-    displayImg = resolveImageUrl(firstImg);
-  } else if (activeTab === 'donasi' && item.campaign?.imageUrl) {
-    displayImg = resolveImageUrl(item.campaign.imageUrl);
-  }
+      if (type === 'laporan') {
+        payload = { reportId: item.id }; 
+        recipientName = item.rescuer?.nickname || "Petugas Rescue";
+      } else {
+        if (!item.cat?.shelterId) {
+          Alert.alert("Error", "Data shelter tidak ditemukan.");
+          return;
+        }
+        payload = { userTwoId: item.cat.shelterId };
+        recipientName = item.cat.shelter?.name || "Shelter";
+      }
 
-  const imageSource = displayImg ? { uri: displayImg } : { uri: 'https://via.placeholder.com/150' };
+      const res = await api.post('/chat/room/init', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-  // Logic khusus buat tombol chat laporan
-  const isLaporanPending = activeTab === 'laporan' && item.status === 'PENDING';
+      router.push({
+        pathname: '/chat-room',
+        params: { roomId: res.data.id, name: recipientName, avatar: type === 'adopsi' ? item.cat?.shelter?.photoProfile : null }
+      });
 
-  return (
-    <TouchableOpacity 
-      style={styles.historyCard} 
-      onPress={() => navigateToDetail(item, activeTab)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardMain}>
-        <Image 
-          source={imageSource} 
-          style={styles.cardImage} 
-          resizeMode="cover"
-        />
+    } catch (error) {
+      Alert.alert("Error", "Gagal memulai chat.");
+    }
+  };
 
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardDate}>{date}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-              <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
+  const renderItem = ({ item }) => {
+    const status = getStatusStyle(item.status);
+    const date = new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+    let displayImg = null;
+    if (activeTab === 'laporan') displayImg = resolveImageUrl(item.imageUrl?.split(',')[0]);
+    else if (activeTab === 'adopsi') displayImg = resolveImageUrl(item.cat?.images?.split(',')[0]);
+    else if (activeTab === 'donasi') displayImg = resolveImageUrl(item.campaign?.imageUrl);
+
+    const isLaporanPending = activeTab === 'laporan' && item.status === 'PENDING';
+
+    return (
+      <TouchableOpacity 
+        style={styles.historyCard} 
+        onPress={() => router.push({ pathname: '/history-detail', params: { data: JSON.stringify(item), type: activeTab } })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardMain}>
+          <Image source={displayImg ? { uri: displayImg } : { uri: 'https://via.placeholder.com/150' }} style={styles.cardImage} />
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardDate}>{date}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
+              </View>
             </View>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {activeTab === 'laporan' ? item.conditionTags : 
+               activeTab === 'adopsi' ? `Adopsi ${item.cat?.name || 'Kucing'}` : 
+               `Donasi ${formatRupiah(item.amount)}`}
+            </Text>
+            <Text style={styles.cardSubtitle} numberOfLines={1}>
+              {activeTab === 'laporan' ? item.address : 
+               activeTab === 'adopsi' ? `📍 ${item.cat?.shelter?.nickname || 'Shelter'}` : 
+               `Untuk: ${item.campaign?.title}`}
+            </Text>
           </View>
-          
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {activeTab === 'laporan' ? item.conditionTags : 
-             activeTab === 'adopsi' ? `Adopsi ${item.cat?.name || 'Kucing'}` : 
-             `Donasi ${formatRupiah(item.amount)}`}
-          </Text>
-          
-          <Text style={styles.cardSubtitle} numberOfLines={1}>
-            {activeTab === 'laporan' ? item.address : 
-             activeTab === 'adopsi' ? `📍 ${item.cat?.shelter?.shelterAddress || 'Lokasi Shelter'}` : 
-             `Untuk: ${item.campaign?.title}`}
-          </Text>
         </View>
-      </View>
 
-      {/* ACTION BUTTON DENGAN LOGIC DISABLE UNTUK LAPORAN PENDING */}
-      {activeTab !== 'donasi' && (
-        <TouchableOpacity 
-          style={[
-            styles.actionButton, 
-            isLaporanPending && { backgroundColor: '#F5F5F5', borderTopColor: '#EEE' } // Style visual kalo disabled
-          ]}
-          onPress={() => {
-            if (isLaporanPending) {
-              Alert.alert(
-                "Laporan Sedang Diproses", 
-                "Mohon tunggu hingga Admin atau Shelter menerima laporan Anda untuk memulai percakapan."
-              );
-            } else {
-              handleContact(item, activeTab);
-            }
-          }}
-        >
-          <Feather 
-            name={isLaporanPending ? "clock" : "message-circle"} 
-            size={14} 
-            color={isLaporanPending ? "#999" : "#12464C"} 
-          />
-          <Text style={[styles.actionButtonText, isLaporanPending && { color: '#999' }]}>
-            {activeTab === 'adopsi' 
-              ? 'Hubungi Shelter' 
-              : isLaporanPending ? 'Menunggu Respon' : 'Tanya Admin'
-            }
-          </Text>
-        </TouchableOpacity>
-      )}
-    </TouchableOpacity>
-  );
-};
+        {activeTab !== 'donasi' && (
+          <TouchableOpacity 
+            style={[styles.actionButton, isLaporanPending && { backgroundColor: '#F5F5F5' }]}
+            onPress={() => isLaporanPending ? Alert.alert("Sabar ya", "Laporanmu belum ada yang ambil.") : handleContact(item, activeTab)}
+          >
+            <Feather name={isLaporanPending ? "clock" : "message-circle"} size={14} color={isLaporanPending ? "#999" : "#12464C"} />
+            <Text style={[styles.actionButtonText, isLaporanPending && { color: '#999' }]}>
+              {activeTab === 'adopsi' ? 'Hubungi Shelter' : isLaporanPending ? 'Menunggu Respon' : 'Hubungi Petugas'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topHeader}>
         <View style={styles.headerTitleRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Feather name="arrow-left" size={24} color="#333" /></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()}><Feather name="arrow-left" size={24} color="#333" /></TouchableOpacity>
           <Text style={styles.headerTitle}>Riwayat Aktivitas</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.searchBox}>
-          <Feather name="search" size={18} color="#999" /><TextInput style={styles.searchInput} placeholder={`Cari ${activeTab}...`} value={searchQuery} onChangeText={setSearchQuery} />
+          <Feather name="search" size={18} color="#999" />
+          <TextInput style={styles.searchInput} placeholder={`Cari ${activeTab}...`} value={searchQuery} onChangeText={setSearchQuery} />
         </View>
       </View>
 
       <View style={styles.tabBar}>
         {['laporan', 'adopsi', 'donasi'].map((tab) => (
-          <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => { setActiveTab(tab); setSelectedStatus('SEMUA'); setSearchQuery(''); }}>
-            <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</Text>
+          <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => { setActiveTab(tab); setSelectedStatus('SEMUA'); }}>
+            <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>{tab.toUpperCase()}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={styles.filterContainer}>
         {activeTab === 'donasi' ? (
-          <TouchableOpacity style={styles.donateCtaBtn} onPress={handleDonateAgain}>
-            <MaterialCommunityIcons name="hand-heart" size={18} color="#FFF" />
-            <Text style={styles.donateCtaText}>Mulai Donasi Baru</Text>
+          <TouchableOpacity style={styles.donateCtaBtn} onPress={() => router.push('/donation-gallery')}>
+            <MaterialCommunityIcons name="hand-heart" size={18} color="#FFF" /><Text style={styles.donateCtaText}>Donasi Lagi</Text>
           </TouchableOpacity>
         ) : (
-          <FlatList horizontal showsHorizontalScrollIndicator={false} data={['SEMUA', 'PENDING', 'ON_PROCESS', 'RESCUED', 'REJECTED']} keyExtractor={(i) => i} renderItem={({item}) => (
-            <TouchableOpacity style={[styles.filterChip, selectedStatus === item && styles.activeChip]} onPress={() => setSelectedStatus(item)}>
-              <Text style={[styles.filterChipText, selectedStatus === item && styles.activeChipText]}>{item === 'SEMUA' ? 'Semua Status' : getStatusStyle(item).label}</Text>
-            </TouchableOpacity>
-          )} contentContainerStyle={{ paddingHorizontal: 20 }} />
+          <FlatList 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            data={statusFilters} 
+            keyExtractor={(i) => i} 
+            renderItem={({item}) => (
+              <TouchableOpacity style={[styles.filterChip, selectedStatus === item && styles.activeChip]} onPress={() => setSelectedStatus(item)}>
+                <Text style={[styles.filterChipText, selectedStatus === item && styles.activeChipText]}>
+                  {item === 'SEMUA' ? 'Semua' : getStatusStyle(item).label}
+                </Text>
+              </TouchableOpacity>
+            )} 
+            contentContainerStyle={{ paddingHorizontal: 20 }} 
+          />
         )}
       </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#12464C" style={{ marginTop: 50 }} />
       ) : (
-        <FlatList data={filteredData} keyExtractor={(item) => item.id.toString()} renderItem={renderItem} contentContainerStyle={styles.listContainer} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} ListEmptyComponent={
-          <View style={styles.emptyContainer}><MaterialCommunityIcons name="clipboard-text-outline" size={60} color="#DDD" /><Text style={styles.emptyText}>Tidak ditemukan riwayat {activeTab}</Text></View>
-        } />
+        <FlatList 
+          data={filteredData} 
+          keyExtractor={(item) => item.id.toString()} 
+          renderItem={renderItem} 
+          contentContainerStyle={styles.listContainer} 
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} 
+          ListEmptyComponent={<View style={styles.emptyContainer}><MaterialCommunityIcons name="clipboard-text-outline" size={60} color="#DDD" /><Text style={styles.emptyText}>Kosong nih...</Text></View>} 
+        />
       )}
     </SafeAreaView>
   );
@@ -286,22 +256,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   topHeader: { backgroundColor: '#FFF', paddingBottom: 15 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', marginHorizontal: 20, paddingHorizontal: 15, borderRadius: 12, height: 45 },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#333' },
   tabBar: { flexDirection: 'row', backgroundColor: '#FFF', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   tabItem: { flex: 1, paddingVertical: 15, alignItems: 'center' },
   activeTabItem: { borderBottomWidth: 2, borderBottomColor: '#12464C' },
-  tabLabel: { fontSize: 14, color: '#999', fontWeight: '500' },
-  activeTabLabel: { color: '#12464C', fontWeight: 'bold' },
+  tabLabel: { fontSize: 13, color: '#999', fontWeight: '700' },
+  activeTabLabel: { color: '#12464C' },
   filterContainer: { paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   donateCtaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#12464C', marginHorizontal: 20, paddingVertical: 12, borderRadius: 12, gap: 8 },
   donateCtaText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
   filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', marginRight: 8, borderWidth: 1, borderColor: '#EEE' },
   activeChip: { backgroundColor: '#12464C', borderColor: '#12464C' },
-  filterChipText: { fontSize: 12, color: '#666', fontWeight: '500' },
-  activeChipText: { color: '#FFF', fontWeight: 'bold' },
+  filterChipText: { fontSize: 12, color: '#666', fontWeight: '700' },
+  activeChipText: { color: '#FFF' },
   listContainer: { padding: 20 },
   historyCard: { backgroundColor: '#FFF', borderRadius: 16, marginBottom: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   cardMain: { flexDirection: 'row', minHeight: 100 },
@@ -310,10 +279,10 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   cardDate: { fontSize: 11, color: '#999' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusText: { fontSize: 10, fontWeight: 'bold' },
+  statusText: { fontSize: 9, fontWeight: '900' },
   cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 4 },
   cardSubtitle: { fontSize: 12, color: '#888' },
-  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F7F7', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E0F0F0', gap: 6 },
+  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F7F7', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E0F0F0', gap: 6 },
   actionButtonText: { fontSize: 12, color: '#12464C', fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 100 },
   emptyText: { marginTop: 10, color: '#999', fontSize: 15 }

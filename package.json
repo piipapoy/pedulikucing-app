@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@react-native-community/datetimepicker": "^8.6.0",
     "multer": "^2.0.2"
   }
 }
